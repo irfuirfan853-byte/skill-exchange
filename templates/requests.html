@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Requests — Skill Exchange{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div>
+    <h1>Connection requests</h1>
+    <p>Accept the people who want to connect — accepting opens a conversation so you can plan an exchange.</p>
+  </div>
+</div>
+
+<div class="dash-bottom">
+  <!-- Incoming -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Incoming</h2>
+      <span class="badge badge-active">{{ incoming|length }}</span>
+    </div>
+    <p class="panel-sub">People who sent you a connection request</p>
+    {% if incoming %}
+    <div class="req-list">
+      {% for r in incoming %}
+      <div class="req-card">
+        <div class="person-top">
+          <a href="{{ url_for('profile', user_id=r.user_id) }}" class="avatar">{{ r.full_name[:1]|upper }}</a>
+          <div>
+            <h4>{{ r.full_name }} <span class="online-dot {{ 'on' if r.presence.online }}"></span></h4>
+            <div class="loc">📍 {{ r.location or 'Location not set' }} · {{ r.created_at.strftime('%d %b') }}</div>
+          </div>
+        </div>
+        <div class="req-actions">
+          <form method="post" action="{{ url_for('respond_request', req_id=r.id, action='accept') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary btn-sm">Accept</button>
+          </form>
+          <form method="post" action="{{ url_for('respond_request', req_id=r.id, action='decline') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline btn-sm">Decline</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="big">📭</div>
+      No pending requests. Search for people and hit Connect!
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- Outgoing -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Sent by you</h2>
+      <span class="badge badge-muted">{{ outgoing|length }}</span>
+    </div>
+    <p class="panel-sub">Requests waiting for the other person to answer</p>
+    {% if outgoing %}
+    <ul class="skill-list">
+      {% for r in outgoing %}
+      <li class="skill-item">
+        <div class="skill-item-top">
+          <span class="name">{{ r.full_name }}</span>
+          <span class="badge badge-warn">⏳ Pending</span>
+        </div>
+        <div class="with">Sent {{ r.created_at.strftime('%d %b') }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      <div class="big">✉️</div>
+      You haven't sent any requests yet.
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+{% endblock %}

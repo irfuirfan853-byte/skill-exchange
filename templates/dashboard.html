@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Skill Exchange{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div>
+    <h1>Dashboard</h1>
+    <p>Welcome back, {{ user.full_name }}! 👋 Here's your skill-exchange progress.</p>
+  </div>
+  <a href="{{ url_for('home') }}#skills" class="btn btn-primary">Find an exchange</a>
+</div>
+
+{% if completeness < 100 %}
+<div class="section" style="padding-top:24px;">
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Complete your profile</h2>
+      <span class="badge badge-warn">{{ completeness }}% done</span>
+    </div>
+    <p class="panel-sub">A complete profile gets you found and connected faster.</p>
+    <div class="progress" style="height:10px; margin-bottom:12px;">
+      <div class="progress-fill" style="width: {{ completeness }}%; background: linear-gradient(90deg, var(--primary), var(--accent));"></div>
+    </div>
+    <ul class="todo-list">
+      {% for item in todo %}
+      <li>☐ {{ item }}</li>
+      {% endfor %}
+    </ul>
+    <a href="{{ url_for('onboarding') }}" class="btn btn-primary btn-sm" style="margin-top:10px;">Finish setup</a>
+  </div>
+</div>
+{% endif %}
+
+<div class="dash-grid">
+  <!-- LEARNING side -->
+  <section class="panel panel-learning">
+    <div class="panel-head">
+      <h2><span class="dot dot-learning"></span> Learning</h2>
+      <span class="badge badge-active">{{ learning_active }} active</span>
+    </div>
+    <p class="panel-sub">Skills others are teaching you</p>
+
+    <div class="donut-row">
+      <div class="donut" style="background: conic-gradient(#0ea5e9 {{ learning_pct }}%, #e2e8f0 0);">
+        <div class="donut-num">{{ learning_pct }}<small>%</small></div>
+      </div>
+      <div class="donut-legend">
+        <b>Average learning progress</b><br>
+        across the skills you're currently learning.
+      </div>
+    </div>
+
+    {% if learning %}
+    <ul class="skill-list">
+      {% for item in learning %}
+      <li class="skill-item">
+        <div class="skill-item-top">
+          <span class="name">{{ item.skill_name }}</span>
+          <span class="pct">{{ item.progress_percent }}%</span>
+        </div>
+        <div class="with">with <b>{{ item.teacher_name }}</b> · {{ item.learning_period_weeks }} weeks</div>
+        <div class="progress">
+          <div class="progress-fill" style="width: {{ item.progress_percent }}%;"></div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      <div class="big">📚</div>
+      You're not learning anything yet.<br>
+      <a href="{{ url_for('home') }}#skills">Explore skills</a> and find someone to teach you.
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- TEACHING side -->
+  <section class="panel panel-teaching">
+    <div class="panel-head">
+      <h2><span class="dot dot-teaching"></span> Teaching</h2>
+      <span class="badge badge-active">{{ teaching_active }} active</span>
+    </div>
+    <p class="panel-sub">Skills you're helping others learn</p>
+
+    <div class="donut-row">
+      <div class="donut" style="background: conic-gradient(#4f46e5 {{ teaching_pct }}%, #e2e8f0 0);">
+        <div class="donut-num">{{ teaching_pct }}<small>%</small></div>
+      </div>
+      <div class="donut-legend">
+        <b>Average teaching progress</b><br>
+        how far your students have come with your help.
+      </div>
+    </div>
+
+    {% if teaching %}
+    <ul class="skill-list">
+      {% for item in teaching %}
+      <li class="skill-item">
+        <div class="skill-item-top">
+          <span class="name">{{ item.skill_name }}</span>
+          <span class="pct">{{ item.progress_percent }}%</span>
+        </div>
+        <div class="with">teaching <b>{{ item.learner_name }}</b> · {{ item.learning_period_weeks }} weeks</div>
+        <div class="progress">
+          <div class="progress-fill" style="width: {{ item.progress_percent }}%;"></div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      <div class="big">🎓</div>
+      No one is learning from you yet.<br>
+      <a href="{{ url_for('settings') }}">Add your skills</a> so people can find you.
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+<div class="dash-bottom">
+  <!-- Known skills -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>My known skills</h2>
+      <span class="badge badge-muted">{{ known_skills|length }}</span>
+    </div>
+    <p class="panel-sub">What you can teach — visible on your profile</p>
+    {% if known_skills %}
+    <div class="tag-cloud">
+      {% for k in known_skills %}
+      <span class="chip" title="{{ k.proficiency|capitalize }} · {{ k.years_experience }} yrs">{{ k.name }} · {{ k.proficiency[:3] }}</span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="big">🏷️</div>
+      You haven't added any skills yet.<br>
+      <a href="{{ url_for('settings') }}">Add skills you know</a>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- Certificates -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>My certificates</h2>
+      <span class="badge badge-done">{{ certificates|length }}</span>
+    </div>
+    <p class="panel-sub">Proof of the skills you've mastered</p>
+    {% if certificates %}
+    <div class="cert-list">
+      {% for c in certificates %}
+      <div class="cert-card">
+        <div class="cert-icon">🏅</div>
+        <div style="flex:1;min-width:0;">
+          <div class="c-name">{{ c.skill_name }}</div>
+          <div class="c-code">{{ c.cert_code }} · {{ c.issued_at.strftime('%d %b %Y') }}</div>
+        </div>
+        {% if c.file_path %}
+        <button type="button" class="btn btn-outline btn-sm cert-view"
+                data-src="{{ url_for('uploaded_file', filename=c.file_path) }}"
+                data-title="{{ c.skill_name }} — {{ c.cert_code }}">View</button>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="big">🏅</div>
+      Complete an exchange to earn your first certificate.
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+{% endblock %}

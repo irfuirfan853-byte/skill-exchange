@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Skill Exchange — Learn a skill, teach a skill{% endblock %}
+{% block content %}
+
+<!-- Hero + search -->
+<header class="hero">
+  <div class="hero-tag">🎓 Give &amp; take — both sides win</div>
+  <h1>Learn a skill you want.<br>Teach a skill you <span class="grad">know well.</span></h1>
+  <p>You know Python, someone else knows Guitar. Swap skills, set a learning period, and grow together — with progress tracking and certificates to prove it.</p>
+
+  <form class="search-box" method="get" action="{{ url_for('home') }}">
+    <input type="text" name="q" placeholder="Search skills or people… e.g. Python, Spanish, Guitar"
+           value="{{ q }}" autofocus>
+    <button type="submit" class="btn btn-primary">Search</button>
+  </form>
+  <div class="popular">
+    Popular:
+    <span class="chip"><a href="{{ url_for('home', q='Python') }}">Python</a></span>
+    <span class="chip"><a href="{{ url_for('home', q='Spanish') }}">Spanish</a></span>
+    <span class="chip"><a href="{{ url_for('home', q='Guitar') }}">Guitar</a></span>
+    <span class="chip"><a href="{{ url_for('home', q='Digital Marketing') }}">Digital Marketing</a></span>
+  </div>
+</header>
+
+<!-- Stats -->
+<section class="stats">
+  <div class="stat"><div class="num">{{ stats.users }}</div><div class="label">Active members</div></div>
+  <div class="stat"><div class="num">{{ stats.exchanges }}</div><div class="label">Skill exchanges</div></div>
+  <div class="stat"><div class="num">{{ stats.certificates }}</div><div class="label">Certificates earned</div></div>
+</section>
+
+{% if q %}
+<!-- Search results -->
+<section class="section">
+  <div class="section-head">
+    <div>
+      <h2>Results for "{{ q }}"</h2>
+      <p>{{ skill_results|length }} matching skill{{ '' if skill_results|length == 1 else 's' }} · {{ people_results|length }} matching person{{ '' if people_results|length == 1 else 's' }}</p>
+    </div>
+  </div>
+
+  {% if skill_results %}
+  <div class="grid-skills" style="margin-bottom: 34px;">
+    {% for s in skill_results %}
+    <div class="skill-card">
+      <span class="tag">{{ s.category }}</span>
+      <h4>{{ s.name }}</h4>
+      <div class="people">👥 {{ s.people }} people <b>● offer</b></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if people_results %}
+  <h3 style="margin-bottom:16px;">People</h3>
+  <div class="grid-people">
+    {% for p in people_results %}
+    <div class="person-card">
+      <div class="person-top">
+        {% if p.avatar_path %}
+          <img class="avatar" src="{{ url_for('uploaded_file', filename=p.avatar_path) }}" alt="">
+        {% else %}
+          <div class="avatar">{{ p.full_name[:1]|upper }}</div>
+        {% endif %}
+        <div>
+          <h4>{{ p.full_name }} <span class="online-dot {{ 'on' if p.presence.online }}" title="{{ p.presence.label }}"></span></h4>
+          <div class="loc">📍 {{ p.location or 'Location not set' }} · {{ p.presence.label }}</div>
+        </div>
+      </div>
+      {% if p.skills %}
+      <div class="skills-line"><b>Knows:</b> {{ p.skills }}</div>
+      {% endif %}
+      <a href="{{ url_for('profile', user_id=p.id) }}" class="btn btn-outline btn-sm" style="margin-top:4px;">View profile</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not skill_results and not people_results %}
+  <div class="empty">
+    <div class="big">🔍</div>
+    No matches for "{{ q }}". Try another skill or browse the popular ones below.
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+<!-- How it works -->
+<section class="section">
+  <div class="section-head">
+    <div>
+      <h2>How Skill Exchange works</h2>
+      <p>Three simple steps to your first give-and-take.</p>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <span class="num-tag">01</span>
+      <div class="step-icon">🔍</div>
+      <h3>Find your match</h3>
+      <p>Search a skill you want to learn and browse profiles of people who know it well.</p>
+    </div>
+    <div class="step">
+      <span class="num-tag">02</span>
+      <div class="step-icon">🤝</div>
+      <h3>Agree the exchange</h3>
+      <p>You teach yours, they teach theirs. Pick a learning period and start a session.</p>
+    </div>
+    <div class="step">
+      <span class="num-tag">03</span>
+      <div class="step-icon">📈</div>
+      <h3>Learn &amp; earn</h3>
+      <p>Track progress, share files and videos, and unlock a certificate when you finish.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Popular skills -->
+<section class="section" id="skills">
+  <div class="section-head">
+    <div>
+      <h2>Explore popular skills</h2>
+      <p>People are offering and looking for these right now.</p>
+    </div>
+  </div>
+  <div class="grid-skills">
+    {% for s in popular %}
+    <a class="skill-card" href="{{ url_for('home', q=s.name) }}">
+      <span class="tag">{{ s.category }}</span>
+      <h4>{{ s.name }}</h4>
+      <div class="people">👥 {{ s.people }} people <b>● offer</b></div>
+    </a>
+    {% else %}
+    <div class="empty" style="grid-column: 1/-1;">
+      <div class="big">🌱</div>
+      No skills yet. <a href="{{ url_for('settings') }}">Add your first skill</a> to get started!
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="cta-box">
+    <h2>Ready to give and take?</h2>
+    <p>Join free, list the skills you know, and start learning something new today.</p>
+    {% if session.get('user_id') %}
+      <a href="{{ url_for('dashboard') }}" class="btn btn-white">Go to your dashboard</a>
+    {% else %}
+      <a href="{{ url_for('signup') }}" class="btn btn-white">Create your free account</a>
+    {% endif %}
+  </div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Settings — Skill Exchange{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div>
+    <h1>Settings</h1>
+    <p>Edit your profile and manage the skills you know.</p>
+  </div>
+</div>
+
+<div class="dash-grid">
+  <!-- Edit profile -->
+  <section class="panel">
+    <div class="panel-head"><h2>Edit profile</h2></div>
+    <p class="panel-sub">This is what other members see about you.</p>
+    <form method="post" action="{{ url_for('settings') }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="profile">
+      <div class="field">
+        <label for="full_name">Full name</label>
+        <input id="full_name" name="full_name" type="text" value="{{ user.full_name }}" required>
+      </div>
+      <div class="field">
+        <label for="location">Location</label>
+        <input id="location" name="location" type="text" placeholder="e.g. Chennai, India" value="{{ user.location or '' }}">
+      </div>
+      <div class="field">
+        <label for="bio">About me</label>
+        <textarea id="bio" name="bio" placeholder="What do you love? What are you looking for?">{{ user.bio or '' }}</textarea>
+      </div>
+      <div class="field">
+        <label for="avatar">Profile picture</label>
+        <input id="avatar" name="avatar" type="file" accept="image/*">
+        {% if user.avatar_path %}<p class="field-hint">Current: <b>{{ user.avatar_path.split('/')[-1] }}</b> — upload a new one to replace it.</p>{% endif %}
+      </div>
+      <button type="submit" class="btn btn-primary">Save changes</button>
+    </form>
+  </section>
+
+  <!-- Upload a certificate -->
+  <section class="panel">
+    <div class="panel-head"><h2>🏅 Add a certificate</h2></div>
+    <p class="panel-sub">Prove a skill you've completed — it shows on your profile so others know you really know it.</p>
+    <form method="post" action="{{ url_for('settings') }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="add_cert">
+      <div class="field">
+        <label for="cert_skill">Skill this certificate is for</label>
+        <input id="cert_skill" name="cert_skill" type="text" list="skill-list" placeholder="e.g. Spanish, Python…" autocomplete="off" required>
+      </div>
+      <div class="field">
+        <label for="cert_file">Certificate file (image or PDF)</label>
+        <input id="cert_file" name="cert_file" type="file" accept="image/*,.pdf" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Upload certificate</button>
+    </form>
+  </section>
+
+  <!-- Add a skill -->
+  <section class="panel">
+    <div class="panel-head"><h2>Add a skill you know</h2></div>
+    <p class="panel-sub">Search the dropdown, or type a new one — it will be saved for everyone.</p>
+    <form method="post" action="{{ url_for('settings') }}" id="addSkillForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="add_skill">
+      <div class="field">
+        <label for="skill_name">Skill</label>
+        <input id="skill_name" name="skill_name" type="text" list="skill-list" placeholder="Start typing… e.g. Python" required autocomplete="off">
+        <datalist id="skill-list">
+          {% for s in all_skills %}
+          <option value="{{ s }}">{{ s }}</option>
+          {% endfor %}
+        </datalist>
+      </div>
+      <div class="field">
+        <label for="proficiency">Proficiency</label>
+        <select id="proficiency" name="proficiency">
+          <option value="beginner">Beginner</option>
+          <option value="intermediate" selected>Intermediate</option>
+          <option value="advanced">Advanced</option>
+          <option value="expert">Expert</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="years_experience">Years of experience</label>
+        <input id="years_experience" name="years_experience" type="number" min="0" max="60" step="0.5" value="1">
+      </div>
+      <button type="submit" class="btn btn-primary">Add skill</button>
+    </form>
+  </section>
+
+  <!-- Add a skill I want to learn -->
+  <section class="panel">
+    <div class="panel-head"><h2>🎯 Add a skill you want to learn</h2></div>
+    <p class="panel-sub">Teachers search for these and reach out to you. If you teach it too, keep it in the list above instead.</p>
+    <form method="post" action="{{ url_for('settings') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="add_learn_skill">
+      <div class="field">
+        <label for="learn_skill_name">Skill to learn</label>
+        <input id="learn_skill_name" name="learn_skill_name" type="text" list="skill-list" placeholder="e.g. Spanish, Photography…" autocomplete="off" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Add to learning list</button>
+    </form>
+  </section>
+</div>
+
+<!-- My skills -->
+<div class="dash-bottom">
+  <section class="panel">
+    <div class="panel-head">
+      <h2>I can teach</h2>
+      <span class="badge badge-active">{{ teach_skills|length }}</span>
+    </div>
+    {% if teach_skills %}
+    <ul class="skill-list">
+      {% for s in teach_skills %}
+      <li class="skill-item">
+        <div class="skill-item-top">
+          <span class="name">{{ s.name }}</span>
+          <span style="display:flex;gap:10px;align-items:center;">
+            <span class="badge badge-muted">{{ s.proficiency|capitalize }} · {{ s.years_experience }} yrs</span>
+            <form method="post" action="{{ url_for('settings') }}" onsubmit="return confirm('Remove {{ s.name }} from your skills?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="remove_skill">
+              <input type="hidden" name="skill_id" value="{{ s.skill_id }}">
+              <button type="submit" class="btn btn-danger-outline btn-sm">Remove</button>
+            </form>
+          </span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      <div class="big">🏷️</div>
+      Nothing yet — add skills you know so people can find you.
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>I want to learn</h2>
+      <span class="badge badge-active">{{ learn_skills|length }}</span>
+    </div>
+    {% if learn_skills %}
+    <ul class="skill-list">
+      {% for s in learn_skills %}
+      <li class="skill-item">
+        <div class="skill-item-top">
+          <span class="name">{{ s.name }}</span>
+          <form method="post" action="{{ url_for('settings') }}" onsubmit="return confirm('Remove {{ s.name }} from your learning list?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="remove_skill">
+            <input type="hidden" name="skill_id" value="{{ s.skill_id }}">
+            <button type="submit" class="btn btn-danger-outline btn-sm">Remove</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      <div class="big">🎯</div>
+      Nothing yet — add a skill you want to learn so teachers can find you.
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+{% endblock %}

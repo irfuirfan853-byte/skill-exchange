@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Set up your profile — Skill Exchange{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div>
+    <h1>Make your profile real 👋</h1>
+    <p>This is what other members see — take 2 minutes so people know who you are and what you offer.</p>
+  </div>
+</div>
+
+<div class="section" style="padding-top: 20px; max-width: 720px;">
+  <form method="post" action="{{ url_for('onboarding') }}" enctype="multipart/form-data" class="panel">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="onb-step">
+      <div class="onb-num">1</div>
+      <div class="onb-body">
+        <h3>Who are you?</h3>
+        <div class="field">
+          <label for="avatar">Profile photo <small>(optional)</small></label>
+          <input id="avatar" name="avatar" type="file" accept="image/*">
+        </div>
+        <div class="field">
+          <label for="location">Location</label>
+          <input id="location" name="location" type="text" placeholder="e.g. Chennai, India" value="{{ user.location or '' }}">
+        </div>
+        <div class="field">
+          <label for="bio">About me</label>
+          <textarea id="bio" name="bio" placeholder="What do you love? What are you good at? What are you hoping to learn?">{{ user.bio or '' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="onb-step">
+      <div class="onb-num">2</div>
+      <div class="onb-body">
+        <h3>Skills you can teach</h3>
+        <p class="panel-sub">Separate with commas — e.g. <b>Python, Guitar, Spanish</b></p>
+        <div class="field">
+          <input type="text" name="teach_skills" list="onb-skills" placeholder="Python, Guitar, …" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="proficiency">Your level in these skills</label>
+          <select id="proficiency" name="proficiency">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate" selected>Intermediate</option>
+            <option value="advanced">Advanced</option>
+            <option value="expert">Expert</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="onb-step">
+      <div class="onb-num">3</div>
+      <div class="onb-body">
+        <h3>Skills you want to learn</h3>
+        <p class="panel-sub">Separate with commas — teachers will find you through these.</p>
+        <div class="field">
+          <input type="text" name="learn_skills" list="onb-skills" placeholder="Spanish, Photography, …" autocomplete="off">
+        </div>
+      </div>
+    </div>
+
+    <datalist id="onb-skills">
+      {% for s in all_skills %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </datalist>
+
+    <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-outline">Skip for now</a>
+      <button type="submit" class="btn btn-primary">Save &amp; go to dashboard</button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Skill Exchange{% endblock %}</title>
+  <script>
+    // Apply saved theme before first paint to avoid a flash
+    (function () {
+      try {
+        var t = localStorage.getItem("se-theme");
+        if (t) document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="{{ url_for('home') }}" class="logo">
+      <div class="logo-badge">⇄</div>
+      Skill<span class="logo-accent">Exchange</span>
+    </a>
+    <div class="nav-links" id="navLinks">
+      <a href="{{ url_for('home') }}" class="{{ 'active' if request.endpoint == 'home' }}">Home</a>
+      {% if session.get('user_id') %}
+      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
+      <a href="{{ url_for('conversations') }}" class="{{ 'active' if request.endpoint == 'conversations' or request.endpoint == 'exchange' }}">Conversations{% if unread_count %}<span class="nav-badge">{{ unread_count }}</span>{% endif %}</a>
+      <a href="{{ url_for('requests_page') }}" class="{{ 'active' if request.endpoint == 'requests_page' }}">Requests{% if pending_count %}<span class="nav-badge">{{ pending_count }}</span>{% endif %}</a>
+      <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint == 'settings' }}">Settings</a>
+      {% endif %}
+    </div>
+    <div class="nav-actions">
+      <button id="themeToggle" class="icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+      {% if session.get('user_id') %}
+        <a href="{{ url_for('profile', user_id=session['user_id']) }}" class="avatar" title="{{ session.get('full_name', '') }}">
+          {% if session.get('avatar_path') %}
+            <img src="{{ url_for('uploaded_file', filename=session['avatar_path']) }}" alt="">
+          {% else %}
+            {{ session.get('full_name', 'U')[:1]|upper }}
+          {% endif %}
+        </a>
+        <a href="{{ url_for('logout') }}" class="btn btn-outline btn-sm">Log out</a>
+      {% else %}
+        <a href="{{ url_for('login') }}" class="btn btn-outline">Log in</a>
+        <a href="{{ url_for('signup') }}" class="btn btn-primary">Sign up free</a>
+      {% endif %}
+      <button id="navToggle" class="icon-btn menu-btn" aria-label="Menu">☰</button>
+    </div>
+  </div>
+</nav>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flash-wrap">
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<main>
+{% block content %}{% endblock %}
+</main>
+
+<footer>
+  Skill Exchange © 2026 — Learn something. Teach something. Grow together.
+</footer>
+
+{% block scripts %}{% endblock %}
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

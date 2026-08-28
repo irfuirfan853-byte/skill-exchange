@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+
+# Secrets — NEVER commit these
+.secret_key
+.env
+.env.*
+*.pem
+*.key
+
+# Uploads — user data, not source code
+uploads/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Freebuff internal
+.freebuff/

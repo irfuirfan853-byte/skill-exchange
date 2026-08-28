@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}{{ user.full_name }} — Skill Exchange{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div style="display:flex;align-items:center;gap:18px;">
+    {% if user.avatar_path %}
+      <img class="profile-avatar" src="{{ url_for('uploaded_file', filename=user.avatar_path) }}" alt="">
+    {% else %}
+      <div class="avatar profile-avatar">{{ user.full_name[:1]|upper }}</div>
+    {% endif %}
+    <div>
+      <h1>{{ user.full_name }} <span class="online-dot {{ 'on' if presence.online }}" title="{{ presence.label }}"></span></h1>
+      <p>📍 {{ user.location or 'Location not set' }} · <span class="presence-label">{{ presence.label }}</span></p>
+      {% if user.bio %}<p style="max-width:640px;">{{ user.bio }}</p>{% endif %}
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;">
+    {% if session.get('user_id') == user.id %}
+    <a href="{{ url_for('settings') }}" class="btn btn-outline">Edit profile</a>
+    {% elif connection == 'can_connect' %}
+    <form method="post" action="{{ url_for('connect', user_id=user.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary">🤝 Connect</button>
+    </form>
+    {% elif connection == 'pending' %}
+    <span class="btn btn-outline" style="cursor:default;">⏳ Request sent</span>
+    {% elif connection == 'incoming' %}
+    <a href="{{ url_for('requests_page') }}" class="btn btn-primary">✉️ Accept their request</a>
+    {% elif connection == 'connected' %}
+    <a href="{{ url_for('conversations') }}" class="btn btn-primary">💬 Message</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="dash-bottom">
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Can teach</h2>
+      <span class="badge badge-active">{{ teach_skills|length }}</span>
+    </div>
+    {% if teach_skills %}
+    <ul class="skill-list">
+      {% for s in teach_skills %}
+      <li class="skill-item">
+        <div class="skill-item-top">
+          <span class="name">{{ s.name }}</span>
+          <span class="badge badge-active">Teaches</span>
+        </div>
+        <div class="with">{{ s.proficiency|capitalize }} · {{ s.years_experience }} years</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      <div class="big">🏷️</div>
+      No skills listed yet.
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Wants to learn</h2>
+      <span class="badge badge-muted">{{ learn_skills|length }}</span>
+    </div>
+    {% if learn_skills %}
+    <div class="tag-cloud">
+      {% for s in learn_skills %}
+      <span class="chip">🎯 {{ s.name }}</span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="big">🎯</div>
+      Not learning anything new right now.
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Certificates</h2>
+      <span class="badge badge-done">{{ certificates|length }}</span>
+    </div>
+    {% if certificates %}
+    <div class="cert-list">
+      {% for c in certificates %}
+      <div class="cert-card">
+        <div class="cert-icon">🏅</div>
+        <div style="flex:1;min-width:0;">
+          <div class="c-name">{{ c.skill_name }}</div>
+          <div class="c-code">{{ c.cert_code }} · {{ c.issued_at.strftime('%d %b %Y') }}</div>
+        </div>
+        {% if c.file_path %}
+        <button type="button" class="btn btn-outline btn-sm cert-view"
+                data-src="{{ url_for('uploaded_file', filename=c.file_path) }}"
+                data-title="{{ c.skill_name }} — {{ c.cert_code }}">View</button>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="big">🏅</div>
+      No certificates yet.
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+{% endblock %}

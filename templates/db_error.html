@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Database not ready — Skill Exchange{% endblock %}
+{% block content %}
+
+<div class="auth-wrap">
+  <div class="auth-card" style="max-width:520px;">
+    <div style="text-align:center; font-size:44px; margin-bottom:8px;">🗄️</div>
+    <h1>Database not connected</h1>
+    <p class="sub">The app can't reach your MySQL database yet. That's an easy fix!</p>
+    <ol style="margin:20px 0 0 20px; font-size:14px; color:var(--text-muted); display:flex; flex-direction:column; gap:8px;">
+      <li>Make sure MySQL is running (XAMPP Control Panel → Start MySQL).</li>
+      <li>Check your credentials in <b>config.py</b>.</li>
+      <li>Run <code>mysql -u root -p &lt; schema.sql</code> to create the database.</li>
+      <li>Run <code>mysql -u root -p skill_exchange &lt; seed_skills.sql</code> to load skills.</li>
+    </ol>
+    <p style="margin-top:20px; font-size:13.5px; color:var(--text-muted);">
+      Full instructions are in <b>SETUP.md</b>.
+    </p>
+    <a href="{{ url_for('home') }}" class="btn btn-primary btn-block" style="margin-top:18px;">Try again</a>
+  </div>
+</div>
+
+{% endblock %}

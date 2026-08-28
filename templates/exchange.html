@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Exchange with {{ ex.other_name }} — Skill Exchange{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div>
+    <a href="{{ url_for('conversations') }}" class="back-link">← Conversations</a>
+    <h1 style="display:flex;align-items:center;gap:10px;">
+      {{ ex.other_name }}
+      <span class="online-dot {{ 'on' if presence.online }}" title="{{ presence.label }}"></span>
+    </h1>
+    <p>{{ presence.label }} · learning period <b>{{ ex.learning_period_weeks }} weeks</b>
+      {% if ex.end_date %}· ends {{ ex.end_date.strftime('%d %b %Y') }}{% endif %}</p>
+  </div>
+  <div class="call-buttons">
+    <button type="button" class="btn btn-outline btn-sm" onclick="SkillCall.start('voice')">📞 Voice call</button>
+    <button type="button" class="btn btn-accent btn-sm" onclick="SkillCall.start('video')">📹 Video call</button>
+  </div>
+</div>
+
+<div class="exchange-grid">
+  <!-- Chat column -->
+  <section class="panel chat-panel">
+    <div class="chat-log" id="chatLog">
+      {% for m in messages %}
+        {% if m.message_type == 'text' %}
+        <div class="msg {{ 'mine' if m.sender_id == me }}" data-id="{{ m.id }}">
+          <div class="msg-bubble">{{ m.content }}</div>
+          <div class="msg-meta">{{ m.sender_name }} · {{ m.created_at.strftime('%H:%M') }}</div>
+        </div>
+        {% elif m.message_type == 'file' %}
+        <div class="msg {{ 'mine' if m.sender_id == me }}" data-id="{{ m.id }}">
+          <div class="msg-bubble file-bubble">
+            <span class="file-ico">📎</span>
+            <div>
+              <div>{{ m.file_name or 'Shared file' }}</div>
+              <a class="file-link" href="{{ url_for('uploaded_file', filename=m.file_path) }}" download>Download</a>
+            </div>
+          </div>
+          <div class="msg-meta">{{ m.sender_name }} · {{ m.created_at.strftime('%H:%M') }}</div>
+        </div>
+        {% elif m.message_type == 'youtube' %}
+        <div class="msg {{ 'mine' if m.sender_id == me }}" data-id="{{ m.id }}">
+          <div class="msg-bubble yt-bubble">
+            <a href="{{ m.youtube_url }}" target="_blank" rel="noopener">{{ m.youtube_url }}</a>
+          </div>
+          <div class="msg-meta">{{ m.sender_name }} · {{ m.created_at.strftime('%H:%M') }}</div>
+        </div>
+        {% endif %}
+      {% else %}
+      <div class="empty" id="chatEmpty">
+        <div class="big">💬</div>
+        No messages yet. Say hi and plan your first session!
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Composer -->
+    <div class="composer">
+      <div class="composer-tabs">
+        <button type="button" class="ctab active" data-tab="text">💬 Message</button>
+        <button type="button" class="ctab" data-tab="file">📎 File</button>
+        <button type="button" class="ctab" data-tab="youtube">▶️ YouTube</button>
+      </div>
+      <form method="post" class="composer-form" id="textForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="text">
+        <input type="text" name="content" placeholder="Type a message…" autocomplete="off" required>
+        <button type="submit" class="btn btn-primary btn-sm">Send</button>
+      </form>
+      <form method="post" class="composer-form" id="fileForm" style="display:none;" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="file">
+        <input type="file" name="file" class="file-input" required>
+        <button type="submit" class="btn btn-primary btn-sm">Upload</button>
+      </form>
+      <form method="post" class="composer-form" id="ytForm" style="display:none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="youtube">
+        <input type="url" name="youtube_url" placeholder="Paste a YouTube link… e.g. https://youtu.be/…" autocomplete="off" required>
+        <button type="submit" class="btn btn-primary btn-sm">Share</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Side column -->
+  <div class="exchange-side">
+    <section class="panel">
+      <div class="panel-head"><h2>📅 Learning period</h2></div>
+      <p class="panel-sub">Agree how many weeks this exchange will run.</p>
+      <form method="post" action="{{ url_for('exchange', exchange_id=ex.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="period">
+        <div class="field">
+          <input type="number" name="weeks" min="1" max="52" value="{{ ex.learning_period_weeks }}" required>
+        </div>
+        <button type="submit" class="btn btn-outline btn-sm">Set period</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>⇄ Skills in this exchange</h2></div>
+      <p class="panel-sub">Add what each of you teaches. Teachers update the learner's progress — it shows on both dashboards.</p>
+
+      {% if legs %}
+      <ul class="skill-list">
+        {% for leg in legs %}
+        <li class="skill-item leg-item {{ 'leg-teach' if leg.teacher_id == me else 'leg-learn' }}">
+          <div class="skill-item-top">
+            <span class="name">{{ leg.skill_name }}</span>
+            <span class="pct">{{ leg.progress_percent }}%</span>
+          </div>
+          <div class="with">
+            {% if leg.teacher_id == me %}
+              <b>You teach</b> {{ leg.learner_name }}
+            {% else %}
+              <b>{{ leg.teacher_name }} teaches you</b>
+            {% endif %}
+            {% if leg.status == 'completed' %} · <span class="badge badge-done">completed</span>{% endif %}
+          </div>
+          {% if leg.teacher_id == me %}
+          <form method="post" action="{{ url_for('exchange', exchange_id=ex.id) }}" class="progress-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="progress">
+            <input type="hidden" name="leg_id" value="{{ leg.id }}">
+            <input type="range" name="pct" min="0" max="100" step="5" value="{{ leg.progress_percent }}"
+                   oninput="this.nextElementSibling.textContent = this.value + '%'">
+            <output>{{ leg.progress_percent }}%</output>
+            <button type="submit" class="btn btn-outline btn-sm">Update</button>
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="empty">
+        <div class="big">🎯</div>
+        No skills added yet — add what you're learning or teaching below.
+      </div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('exchange', exchange_id=ex.id) }}" class="leg-form" style="margin-top:14px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_leg">
+        <div class="field">
+          <select name="direction">
+            <option value="learning">I'm learning this</option>
+            <option value="teaching">I'm teaching this</option>
+          </select>
+        </div>
+        <div class="field">
+          <input type="text" name="skill_name" list="leg-skills" placeholder="e.g. Python, Guitar…" autocomplete="off" required>
+          <datalist id="leg-skills">
+            {% for s in all_skills %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+          </datalist>
+        </div>
+        <button type="submit" class="btn btn-outline btn-sm">Add to exchange</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>📞 Recent calls</h2></div>
+      {% if calls %}
+      <ul class="skill-list">
+        {% for c in calls %}
+        <li class="skill-item">
+          <div class="skill-item-top">
+            <span class="name">{{ c.call_type|capitalize }} call</span>
+            {% if c.duration_seconds %}
+              <span class="badge badge-muted">{{ (c.duration_seconds // 60) }}m {{ c.duration_seconds % 60 }}s</span>
+            {% else %}
+              <span class="badge badge-warn">missed</span>
+            {% endif %}
+          </div>
+          <div class="with">{{ c.caller_name }} · {{ c.started_at.strftime('%d %b · %H:%M') }}</div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="empty"><div class="big">📞</div>No calls yet.</div>
+      {% endif %}
+    </section>
+  </div>
+</div>
+
+<!-- Call overlay -->
+<div class="call-overlay" id="callOverlay" hidden>
+  <div class="call-box">
+    <div class="call-top">
+      <div>
+        <h2 id="callName">{{ ex.other_name }}</h2>
+        <p id="callStatus">Starting…</p>
+      </div>
+      <button type="button" class="icon-btn" onclick="SkillCall.hangup()" title="Close">✕</button>
+    </div>
+    <div class="call-videos">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <video id="localVideo" autoplay playsinline muted></video>
+    </div>
+    <div class="call-controls">
+      <button type="button" class="icon-btn" id="muteBtn" onclick="SkillCall.toggleMute()" title="Mute">🎙️</button>
+      <button type="button" class="icon-btn hangup-btn" onclick="SkillCall.hangup()" title="Hang up">📵</button>
+      <button type="button" class="icon-btn" id="camBtn" onclick="SkillCall.toggleCam()" title="Toggle camera">📷</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>window.EXCHANGE_ID = {{ ex.id }}; window.ME_ID = {{ me }}; window.CSRF_TOKEN = {{ csrf_token()|tojson }};</script>
+<script src="{{ url_for('static', filename='js/call.js') }}"></script>
+{% endblock %}

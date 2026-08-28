@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Conversations — Skill Exchange{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div>
+    <h1>Conversations</h1>
+    <p>Chat, share files and videos, and call the people you're exchanging skills with.</p>
+  </div>
+  <a href="{{ url_for('home') }}#skills" class="btn btn-primary">Find someone new</a>
+</div>
+
+<div class="section" style="padding-top: 24px;">
+  {% if convos %}
+  <div class="conv-list">
+    {% for c in convos %}
+    <a href="{{ url_for('exchange', exchange_id=c.id) }}" class="conv-card">
+      <div class="conv-avatar">
+        <div class="avatar">{{ c.other_name[:1]|upper }}</div>
+        <span class="online-dot {{ 'on' if c.presence.online }}" title="{{ c.presence.label }}"></span>
+      </div>
+      <div class="conv-main">
+        <div class="conv-top">
+          <h4>{{ c.other_name }}</h4>
+          {% if c.last_at %}<span class="conv-time">{{ c.last_at.strftime('%d %b · %H:%M') }}</span>{% endif %}
+        </div>
+        <div class="conv-preview">
+          {% if c.last_type == 'file' %}📎 {{ c.last_content or 'Shared a file' }}
+          {% elif c.last_type == 'youtube' %}▶️ Shared a YouTube video
+          {% else %}{{ c.last_content or 'No messages yet — say hi!' }}
+          {% endif %}
+        </div>
+      </div>
+      <div class="conv-side">
+        <span class="badge {{ 'badge-active' if c.exchange_status == 'active' else 'badge-done' }}">
+          {{ c.exchange_status|capitalize }}
+        </span>
+        {% if c.unread %}<span class="nav-badge unread-big">{{ c.unread }}</span>{% endif %}
+        <span class="conv-period">📅 {{ c.learning_period_weeks }} wk</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="big">💬</div>
+    No conversations yet.<br>
+    Find someone on the <a href="{{ url_for('home') }}">home page</a>, view their profile and hit <b>Connect</b> — when they accept, your conversation starts here.
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
