@@ -4,25 +4,13 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCmd: waitress-serve --host=0.0.0.0 --port=$PORT --threads=8 app:app
+    startCmd: python setup_sqlite.py && python seed_demo_sqlite.py && waitress-serve --host=0.0.0.0 --port=$PORT --threads=8 app:app
     envVars:
-      - key: SE_DB_HOST
+      - key: SE_APP_URL
         sync: false
-      - key: SE_DB_PORT
-        value: 4000
-      - key: SE_DB_USER
-        sync: false
-      - key: SE_DB_PASSWORD
-        sync: false
-      - key: SE_DB_NAME
-        value: skill_exchange
-      - key: SE_DB_SSL_CA
-        value: "1"
       - key: SE_SECRET_KEY
         generateValue: true
       - key: SE_COOKIE_SECURE
         value: "1"
-      - key: SE_APP_URL
-        sync: false
       - key: PYTHON_VERSION
         value: 3.11.8

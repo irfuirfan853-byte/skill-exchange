@@ -31,3 +31,9 @@ Thumbs.db
 
 # Freebuff internal
 .freebuff/
+
+# SQLite database (contains user data)
+skill_exchange.db
+
+# Cloudflare tunnel binary
+cloudflared.exe

@@ -1,23 +1,18 @@
 FROM python:3.11-slim
 
-# System deps for PyMySQL SSL
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
-# Install Python deps first (cached layer)
+# Install Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app code
 COPY . .
 
-# Create uploads directory
-RUN mkdir -p uploads/avatars uploads/certs uploads/files
+# Create directories
+RUN mkdir -p uploads/avatars uploads/certs uploads/files .freebuff
 
-EXPOSE 8000
+EXPOSE 5000
 
-# Production server: waitress (threaded, production-ready WSGI)
-CMD ["waitress-serve", "--host=0.0.0.0", "--port=8000", "--threads=8", "app:app"]
+# Run schema + seed on first boot, then start the app
+CMD python setup_sqlite.py && python seed_demo_sqlite.py && waitress-serve --host=0.0.0.0 --port=5000 --threads=8 app:app
