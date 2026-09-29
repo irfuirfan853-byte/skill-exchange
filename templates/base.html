@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Skill Exchange{% endblock %}</title>
+  <title>{% block title %}Skill Exchange — Learn a skill, teach a skill{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Skill Exchange is a free platform where people trade skills: teach what you know, learn what you want, earn certificates and connect with real learners worldwide.{% endblock %}">
+  <meta name="robots" content="index, follow">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Skill Exchange">
+  <meta property="og:title" content="{% block og_title %}Skill Exchange — Learn a skill, teach a skill{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Teach what you know, learn what you want. Trade skills with real people, track progress, and earn certificates.{% endblock %}">
+  <meta property="og:url" content="{{ request.url }}">
+  <meta name="twitter:card" content="summary">
   <script>
     // Apply saved theme before first paint to avoid a flash
     (function () {

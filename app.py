@@ -1176,5 +1176,51 @@ def not_found(e):
     return render_template("404.html"), 404
 
 
+# ------------------------------------------------------------------
+# SEO — help search engines index the site (robots.txt + sitemap.xml)
+# ------------------------------------------------------------------
+@app.route("/robots.txt")
+def robots_txt():
+    lines = [
+        "User-agent: *",
+        "Disallow: /dashboard",
+        "Disallow: /settings",
+        "Disallow: /conversations",
+        "Disallow: /requests",
+        "Disallow: /onboarding",
+        "Disallow: /exchange/",
+        "Disallow: /uploads/",
+        "Allow: /",
+        "",
+        "Sitemap: {}/sitemap.xml".format(config.APP_URL.rstrip("/")),
+        "",
+    ]
+    return "\n".join(lines), 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    base = config.APP_URL.rstrip("/")
+    urls = [
+        ("/", "daily", "1.0"),
+        ("/signup", "monthly", "0.8"),
+        ("/login", "monthly", "0.5"),
+    ]
+    # Public profiles are the pages people actually search for
+    try:
+        rows = db.query("SELECT id FROM users ORDER BY id LIMIT 500")
+        for r in rows:
+            urls.append(("/profile/{}".format(r["id"]), "weekly", "0.6"))
+    except pymysql.MySQLError:
+        pass
+    parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for path, freq, pri in urls:
+        parts.append("  <url><loc>{}{}</loc><changefreq>{}</changefreq>"
+                     "<priority>{}</priority></url>".format(base, path, freq, pri))
+    parts.append("</urlset>")
+    return "\n".join(parts), 200, {"Content-Type": "application/xml; charset=utf-8"}
+
+
 if __name__ == "__main__":
     app.run(debug=True)
