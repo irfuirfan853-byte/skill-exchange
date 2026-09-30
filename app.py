@@ -112,6 +112,12 @@ def presence(last_seen):
     """Turn a last_seen timestamp into an online flag + human label."""
     if not last_seen:
         return {"online": False, "label": "Offline"}
+    # SQLite returns a string like '2026-09-30 12:34:56' — parse it.
+    if isinstance(last_seen, str):
+        try:
+            last_seen = datetime.strptime(last_seen[:19], "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return {"online": False, "label": "Offline"}
     diff = datetime.now() - last_seen
     secs = diff.total_seconds()
     if secs < ONLINE_WINDOW_SECONDS:
