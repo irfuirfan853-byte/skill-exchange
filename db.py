@@ -130,6 +130,11 @@ def _sqlite_conn():
     return conn
 
 
+def using_sqlite():
+    """True when the app is running on the zero-setup SQLite backend."""
+    return _use_sqlite
+
+
 def get_db_connection():
     """Opens a fresh database connection (MySQL or SQLite)."""
     if _use_sqlite:
@@ -146,7 +151,8 @@ def _wrap_sqlite_error(e):
 # Columns SQLite stores as TEXT but templates expect as datetime/date objects.
 _DATETIME_COLS = {
     "last_seen", "created_at", "issued_at", "started_at",
-    "ended_at", "completed_at", "responded_at",
+    "ended_at", "completed_at", "responded_at", "expires_at",
+    "acknowledged_at", "resolved_at",
     # aliases used by aggregate/subquery SELECTs
     "last_at", "other_last_seen",
 }

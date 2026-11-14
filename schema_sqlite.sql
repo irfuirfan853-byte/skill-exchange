@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     bio             TEXT,
     location        TEXT,
     avatar_path     TEXT,
+    is_admin        INTEGER NOT NULL DEFAULT 0,        -- 1 = emergency SOS admin
     last_seen       TEXT,
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -43,6 +44,19 @@ CREATE TABLE IF NOT EXISTS user_skills (
 );
 CREATE INDEX IF NOT EXISTS idx_us_skill ON user_skills(skill_id);
 
+-- 3a. PASSWORD_RESETS (email OTP flow)
+CREATE TABLE IF NOT EXISTS password_resets (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL,
+    otp_hash     TEXT    NOT NULL,
+    expires_at   TEXT    NOT NULL,
+    used         INTEGER NOT NULL DEFAULT 0,
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_pr_user ON password_resets(user_id, used);
+
 -- 3b. CONNECTION_REQUESTS
 CREATE TABLE IF NOT EXISTS connection_requests (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,6 +71,26 @@ CREATE TABLE IF NOT EXISTS connection_requests (
     FOREIGN KEY (to_user_id)   REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_cr_to ON connection_requests(to_user_id, status);
+
+-- 3c. SOS_REPORTS — emergency alerts (visible to the sender and admins only)
+CREATE TABLE IF NOT EXISTS sos_reports (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL,
+    category        TEXT    NOT NULL DEFAULT 'other',
+    message         TEXT    NOT NULL,
+    location        TEXT,
+    contact         TEXT,
+    status          TEXT    NOT NULL DEFAULT 'open',
+    admin_note      TEXT,
+    handled_by      INTEGER,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    acknowledged_at TEXT,
+    resolved_at     TEXT,
+    FOREIGN KEY (user_id)    REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (handled_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sos_user ON sos_reports(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_sos_status ON sos_reports(status, created_at);
 
 -- 4. EXCHANGES
 CREATE TABLE IF NOT EXISTS exchanges (

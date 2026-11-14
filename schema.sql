@@ -25,6 +25,7 @@ CREATE TABLE users (
     bio             TEXT          NULL,               -- short "about me"
     location        VARCHAR(120)  NULL,
     avatar_path     VARCHAR(255)  NULL,               -- uploaded profile picture
+    is_admin        TINYINT       NOT NULL DEFAULT 0, -- 1 = emergency SOS admin
     last_seen       DATETIME      NULL,               -- online/offline presence
     created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -62,6 +63,21 @@ CREATE TABLE user_skills (
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------
+-- 3a. PASSWORD_RESETS — email OTP flow for "Forgot password?"
+-- ------------------------------------------------------------
+CREATE TABLE password_resets (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT UNSIGNED NOT NULL,
+    otp_hash      VARCHAR(255) NOT NULL,               -- hashed 6-digit OTP
+    expires_at    DATETIME     NOT NULL,               -- OTP valid for 10 minutes
+    used          TINYINT      NOT NULL DEFAULT 0,
+    attempts      INT          NOT NULL DEFAULT 0,     -- wrong-OTP counter
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_pr_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+CREATE INDEX idx_pr_user ON password_resets (user_id, used);
+
+-- ------------------------------------------------------------
 -- 3b. CONNECTION_REQUESTS — the "Connect" button flow between members
 -- ------------------------------------------------------------
 CREATE TABLE connection_requests (
@@ -75,6 +91,29 @@ CREATE TABLE connection_requests (
     KEY idx_to_user (to_user_id, status),
     CONSTRAINT fk_cr_from FOREIGN KEY (from_user_id) REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_cr_to   FOREIGN KEY (to_user_id)   REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ------------------------------------------------------------
+-- 3c. SOS_REPORTS — emergency alerts. Visible to the member who sent it
+--     and to admins only (never to other members).
+-- ------------------------------------------------------------
+CREATE TABLE sos_reports (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT UNSIGNED NOT NULL,
+    category        VARCHAR(40)  NOT NULL DEFAULT 'other',
+    message         TEXT         NOT NULL,
+    location        VARCHAR(160) NULL,
+    contact         VARCHAR(120) NULL,
+    status          VARCHAR(20)  NOT NULL DEFAULT 'open',
+    admin_note      VARCHAR(500) NULL,
+    handled_by      INT UNSIGNED NULL,
+    created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    acknowledged_at DATETIME     NULL,
+    resolved_at     DATETIME     NULL,
+    KEY idx_sos_user (user_id, status),
+    KEY idx_sos_status (status, created_at),
+    CONSTRAINT fk_sos_user    FOREIGN KEY (user_id)    REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_sos_handler FOREIGN KEY (handled_by) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------

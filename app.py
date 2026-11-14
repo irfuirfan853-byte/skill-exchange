@@ -3,7 +3,7 @@ import os
 import secrets
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from urllib.parse import urlsplit
 
@@ -181,6 +181,129 @@ def notify_user(user_id, subject, body):
         pass
 
 
+# ------------------------------------------------------------------
+# Emergency SOS + admin access
+# ------------------------------------------------------------------
+SOS_CATEGORIES = {
+    "medical": "Medical emergency",
+    "safety": "Personal safety",
+    "harassment": "Harassment or abuse",
+    "account": "Account or data security",
+    "other": "Other",
+}
+SOS_STATUSES = ("open", "acknowledged", "resolved")
+
+
+def ensure_security_schema():
+    """Make sure the SOS table and the users.is_admin flag exist.
+
+    Fresh installs get them from schema.sql / schema_sqlite.sql. This keeps
+    databases created before the SOS feature working without wiping data.
+    """
+    try:
+        if db.using_sqlite():
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS sos_reports (
+                       id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                       user_id         INTEGER NOT NULL,
+                       category        TEXT    NOT NULL DEFAULT 'other',
+                       message         TEXT    NOT NULL,
+                       location        TEXT,
+                       contact         TEXT,
+                       status          TEXT    NOT NULL DEFAULT 'open',
+                       admin_note      TEXT,
+                       handled_by      INTEGER,
+                       created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                       acknowledged_at TEXT,
+                       resolved_at     TEXT,
+                       FOREIGN KEY (user_id)    REFERENCES users(id) ON DELETE CASCADE,
+                       FOREIGN KEY (handled_by) REFERENCES users(id) ON DELETE SET NULL
+                   )"""
+            )
+            db.execute("CREATE INDEX IF NOT EXISTS idx_sos_user ON sos_reports(user_id, status)")
+            db.execute("CREATE INDEX IF NOT EXISTS idx_sos_status ON sos_reports(status, created_at)")
+            cols = [c.get("name") for c in db.query("PRAGMA table_info(users)")]
+            if "is_admin" not in cols:
+                db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+        else:
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS sos_reports (
+                       id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                       user_id         INT UNSIGNED NOT NULL,
+                       category        VARCHAR(40)  NOT NULL DEFAULT 'other',
+                       message         TEXT         NOT NULL,
+                       location        VARCHAR(160) NULL,
+                       contact         VARCHAR(120) NULL,
+                       status          VARCHAR(20)  NOT NULL DEFAULT 'open',
+                       admin_note      VARCHAR(500) NULL,
+                       handled_by      INT UNSIGNED NULL,
+                       created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                       acknowledged_at DATETIME     NULL,
+                       resolved_at     DATETIME     NULL,
+                       KEY idx_sos_user (user_id, status),
+                       KEY idx_sos_status (status, created_at),
+                       CONSTRAINT fk_sos_user    FOREIGN KEY (user_id)    REFERENCES users (id) ON DELETE CASCADE,
+                       CONSTRAINT fk_sos_handler FOREIGN KEY (handled_by) REFERENCES users (id) ON DELETE SET NULL
+                   ) ENGINE=InnoDB"""
+            )
+            cols = db.query(
+                """SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'"""
+            )
+            if "is_admin" not in [c.get("name") for c in cols]:
+                db.execute("ALTER TABLE users ADD COLUMN is_admin TINYINT NOT NULL DEFAULT 0")
+    except pymysql.MySQLError:
+        # Database not reachable or not set up yet — the friendly setup page
+        # handles that case, so there is nothing to do here.
+        pass
+
+
+def is_admin_user(user_id):
+    """Admin rights come from the database flag only — never from the URL,
+    a form field or the session cookie's contents."""
+    try:
+        row = db.query("SELECT is_admin FROM users WHERE id=%s", (user_id,), one=True)
+        return bool(row and row.get("is_admin"))
+    except pymysql.MySQLError:
+        return False
+
+
+def admin_required(f):
+    """Like login_required, but also demands the admin flag."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            flash("Please log in to view that page.", "warning")
+            return redirect(url_for("login", next=request.path))
+        if not is_admin_user(session["user_id"]):
+            abort(403)
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def grant_admin_if_listed(user):
+    """Promote accounts named in SE_ADMIN_EMAILS at login time."""
+    if not config.ADMIN_EMAILS or not user:
+        return
+    try:
+        if (user.get("email") or "").lower() in config.ADMIN_EMAILS and not user.get("is_admin"):
+            db.execute("UPDATE users SET is_admin=1 WHERE id=%s", (user["id"],))
+    except pymysql.MySQLError:
+        pass
+
+
+def notify_admins(subject, body):
+    """Email every admin address. Never raises."""
+    if not config.SMTP_HOST:
+        return
+    for address in config.ADMIN_EMAILS:
+        send_email(address, subject, body)
+
+
+# Runs once at import: adds the SOS table / admin flag to older databases.
+ensure_security_schema()
+
+
 def get_exchange_for_user(exchange_id, user_id):
     """Fetch an exchange only if the given user is part of it."""
     row = db.query(
@@ -209,7 +332,7 @@ def touch_last_seen():
 @app.context_processor
 def inject_nav_counts():
     """Unread messages + pending connection requests, shown as nav badges."""
-    counts = {"unread_count": 0, "pending_count": 0}
+    counts = {"unread_count": 0, "pending_count": 0, "is_admin": False, "counts_open_sos": 0}
     uid = session.get("user_id")
     if uid:
         try:
@@ -226,6 +349,13 @@ def inject_nav_counts():
                 (uid,), one=True,
             )
             counts["pending_count"] = row["c"] if row else 0
+            admin_row = db.query("SELECT is_admin FROM users WHERE id=%s", (uid,), one=True)
+            counts["is_admin"] = bool(admin_row and admin_row.get("is_admin"))
+            if counts["is_admin"]:
+                sos_row = db.query(
+                    "SELECT COUNT(*) AS c FROM sos_reports WHERE status='open'", one=True
+                )
+                counts["counts_open_sos"] = sos_row["c"] if sos_row else 0
         except pymysql.MySQLError:
             pass
     return counts
@@ -293,6 +423,7 @@ def login():
             user = db.query("SELECT * FROM users WHERE email=%s", (email,), one=True)
             if user and check_password_hash(user["password_hash"], password):
                 clear_login_failures(ip)
+                grant_admin_if_listed(user)
                 session["user_id"] = user["id"]
                 session["full_name"] = user["full_name"]
                 session["avatar_path"] = user.get("avatar_path")
@@ -311,6 +442,334 @@ def logout():
     session.clear()
     flash("You have been logged out. See you soon! 👋", "success")
     return redirect(url_for("home"))
+
+
+# ------------------------------------------------------------------
+# Forgot password — email OTP flow
+# Request code -> enter 6-digit OTP -> set a new password.
+# OTPs are hashed, expire in 10 minutes, max 5 wrong tries and
+# max 3 codes per 15 minutes per account.
+# ------------------------------------------------------------------
+def _dtfmt(dt):
+    """Format a datetime the way both MySQL and SQLite store it."""
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        try:
+            user = db.query(
+                "SELECT id, full_name, email FROM users WHERE email=%s", (email,), one=True
+            )
+        except pymysql.MySQLError:
+            return db_error_page()
+
+        if user:
+            now = datetime.now()
+            cutoff = _dtfmt(now - timedelta(minutes=15))
+            recent = db.query(
+                "SELECT COUNT(*) AS c FROM password_resets WHERE user_id=%s AND created_at > %s",
+                (user["id"], cutoff), one=True,
+            )
+            if (recent or {}).get("c", 0) >= 3:
+                flash("Too many reset codes requested. Please wait 15 minutes.", "error")
+                return render_template("forgot_password.html")
+
+            otp = "{:#06d}".format(secrets.randbelow(1000000))
+            db.execute(
+                """INSERT INTO password_resets (user_id, otp_hash, expires_at, created_at)
+                   VALUES (%s, %s, %s, %s)""",
+                (user["id"], generate_password_hash(otp),
+                 _dtfmt(now + timedelta(minutes=10)), _dtfmt(now)),
+            )
+            sent = send_email(
+                user["email"],
+                "Your Skill Exchange password reset code",
+                "Hi {},\n\nYour password reset code is: {}\n\n"
+                "It expires in 10 minutes.\n"
+                "If you didn't request this, you can safely ignore this email.\n\n"
+                "— Skill Exchange".format(user["full_name"], otp),
+            )
+            if not sent:
+                if not config.SMTP_HOST:
+                    # Dev fallback (no SMTP configured): show the code on screen
+                    # so the flow stays usable locally. Production sets SMTP.
+                    flash(
+                        "Email sending isn't configured on this server (dev mode) — "
+                        "your reset code is: {}".format(otp), "warning"
+                    )
+                else:
+                    flash("Couldn't send the email right now — please try again.", "error")
+            session["reset_user_id"] = user["id"]
+            return redirect(url_for("verify_otp"))
+
+        # Same message whether or not the account exists (no account enumeration)
+        flash("If that email is registered, a reset code is on its way. Check your inbox.", "success")
+        return redirect(url_for("verify_otp"))
+
+    return render_template("forgot_password.html")
+
+
+@app.route("/reset/verify", methods=["GET", "POST"])
+def verify_otp():
+    uid = session.get("reset_user_id")
+    if not uid:
+        flash("No password reset in progress — start again.", "warning")
+        return redirect(url_for("forgot_password"))
+
+    if request.method == "POST":
+        code = request.form.get("otp", "").strip()
+        row = db.query(
+            """SELECT * FROM password_resets
+               WHERE user_id=%s AND used=0 ORDER BY id DESC LIMIT 1""",
+            (uid,), one=True,
+        )
+        if not row:
+            flash("No active code — request a new one.", "error")
+            return redirect(url_for("forgot_password"))
+
+        expires = row.get("expires_at")
+        if isinstance(expires, str):
+            try:
+                expires = datetime.strptime(expires[:19], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                expires = None
+        if not expires or expires < datetime.now():
+            flash("That code has expired — request a new one.", "error")
+            return redirect(url_for("forgot_password"))
+        if row.get("attempts", 0) >= 5:
+            flash("Too many wrong attempts — request a new code.", "error")
+            return redirect(url_for("forgot_password"))
+
+        if code and check_password_hash(row["otp_hash"], code):
+            db.execute("UPDATE password_resets SET used=1 WHERE id=%s", (row["id"],))
+            session["reset_verified_id"] = uid
+            session.pop("reset_user_id", None)
+            return redirect(url_for("reset_password"))
+
+        db.execute("UPDATE password_resets SET attempts=attempts+1 WHERE id=%s", (row["id"],))
+        remaining = 5 - row.get("attempts", 0) - 1
+        flash("Wrong code. Try again." + (
+            " ({} attempt{} left)".format(remaining, "s" if remaining != 1 else "")
+            if remaining <= 2 else ""), "error")
+
+    return render_template("verify_otp.html")
+
+
+@app.route("/reset/password", methods=["GET", "POST"])
+def reset_password():
+    uid = session.get("reset_verified_id")
+    if not uid:
+        return redirect(url_for("forgot_password"))
+
+    if request.method == "POST":
+        p1 = request.form.get("password", "")
+        p2 = request.form.get("confirm", "")
+        if len(p1) < 6:
+            flash("Password must be at least 6 characters.", "error")
+        elif p1 != p2:
+            flash("Passwords do not match.", "error")
+        else:
+            db.execute(
+                "UPDATE users SET password_hash=%s WHERE id=%s",
+                (generate_password_hash(p1), uid),
+            )
+            db.execute("DELETE FROM password_resets WHERE user_id=%s", (uid,))
+            session.pop("reset_verified_id", None)
+            flash("Password updated! Log in with your new password. 🔐", "success")
+            return redirect(url_for("login"))
+
+    return render_template("reset_password.html")
+
+
+# ------------------------------------------------------------------
+# Emergency SOS — visible only to the member who sent it and to admins
+# ------------------------------------------------------------------
+@app.route("/sos", methods=["GET", "POST"])
+@login_required
+def sos():
+    me = session["user_id"]
+    try:
+        if request.method == "POST":
+            category = request.form.get("category", "other")
+            if category not in SOS_CATEGORIES:
+                category = "other"
+            message = request.form.get("message", "").strip()[:2000]
+            location = request.form.get("location", "").strip()[:160] or None
+            contact = request.form.get("contact", "").strip()[:120] or None
+
+            if len(message) < 10:
+                flash("Describe the emergency in a few words (at least 10 characters).", "error")
+            else:
+                open_report = db.query(
+                    """SELECT id FROM sos_reports
+                       WHERE user_id=%s AND status <> 'resolved'
+                       ORDER BY id DESC LIMIT 1""",
+                    (me,), one=True,
+                )
+                if open_report:
+                    flash("You already have an SOS report open (#{}) — the admin team is on it. "
+                          "Use “Mark as resolved” on that report before sending a new one."
+                          .format(open_report["id"]), "warning")
+                else:
+                    sos_id = db.execute(
+                        """INSERT INTO sos_reports
+                               (user_id, category, message, location, contact, status, created_at)
+                           VALUES (%s, %s, %s, %s, %s, 'open', %s)""",
+                        (me, category, message, location, contact, _dtfmt(datetime.now())),
+                    )
+                    sender = get_user(me) or {}
+                    notify_admins(
+                        "🆘 SOS #{} — {}".format(sos_id, SOS_CATEGORIES[category]),
+                        "A member sent an emergency SOS.\n\n"
+                        "Member: {} ({})\nCategory: {}\nLocation: {}\nContact: {}\n\n{}"
+                        "\n\nReview it in the admin console: {}/admin".format(
+                            sender.get("full_name", "Unknown"),
+                            sender.get("email", ""),
+                            SOS_CATEGORIES[category],
+                            location or "not given",
+                            contact or "not given",
+                            message,
+                            config.APP_URL.rstrip("/"),
+                        ),
+                    )
+                    flash("🆘 SOS sent to the admin team (#{}). This report is private — "
+                          "only you and the admin can see it.".format(sos_id), "success")
+            return redirect(url_for("sos"))
+
+        reports = db.query(
+            """SELECT * FROM sos_reports WHERE user_id=%s ORDER BY id DESC""",
+            (me,),
+        )
+        return render_template(
+            "sos.html",
+            reports=reports,
+            categories=SOS_CATEGORIES,
+            status_labels={"open": "Open — admin notified",
+                           "acknowledged": "Acknowledged by admin",
+                           "resolved": "Resolved"},
+        )
+    except pymysql.MySQLError:
+        return db_error_page()
+
+
+@app.route("/sos/<int:sos_id>/resolve", methods=["POST"])
+@login_required
+def sos_resolve(sos_id):
+    me = session["user_id"]
+    try:
+        row = db.query(
+            "SELECT id, status FROM sos_reports WHERE id=%s AND user_id=%s",
+            (sos_id, me), one=True,
+        )
+        if not row:
+            abort(404)  # someone else's report — never reveal that it exists
+        if row["status"] != "resolved":
+            db.execute(
+                "UPDATE sos_reports SET status='resolved', resolved_at=%s WHERE id=%s AND user_id=%s",
+                (_dtfmt(datetime.now()), sos_id, me),
+            )
+            flash("SOS #{} marked as resolved. Glad you're safe. 💙".format(sos_id), "success")
+        else:
+            flash("That SOS is already closed.", "warning")
+    except pymysql.MySQLError:
+        return db_error_page()
+    return redirect(url_for("sos"))
+
+
+# ------------------------------------------------------------------
+# Admin console — SOS triage
+# ------------------------------------------------------------------
+@app.route("/admin")
+@admin_required
+def admin_panel():
+    status = request.args.get("status", "")
+    if status not in SOS_STATUSES:
+        status = ""
+    try:
+        base_sql = """SELECT s.*, u.full_name AS user_name, u.email AS user_email,
+                             u.location AS user_location, h.full_name AS handler_name
+                      FROM sos_reports s
+                      JOIN users u ON u.id = s.user_id
+                      LEFT JOIN users h ON h.id = s.handled_by"""
+        order = (""" ORDER BY CASE s.status WHEN 'open' THEN 0
+                                       WHEN 'acknowledged' THEN 1 ELSE 2 END,
+                             s.id DESC LIMIT 200""")
+        if status:
+            reports = db.query(base_sql + " WHERE s.status=%s" + order, (status,))
+        else:
+            reports = db.query(base_sql + order)
+
+        counts = {"open": 0, "acknowledged": 0, "resolved": 0}
+        for row in db.query("SELECT status, COUNT(*) AS c FROM sos_reports GROUP BY status"):
+            if row["status"] in counts:
+                counts[row["status"]] = row["c"]
+        stats = {
+            "users": (db.query("SELECT COUNT(*) AS c FROM users", one=True) or {}).get("c", 0),
+            "exchanges": (db.query("SELECT COUNT(*) AS c FROM exchanges", one=True) or {}).get("c", 0),
+        }
+        return render_template(
+            "admin.html",
+            reports=reports,
+            counts=counts,
+            stats=stats,
+            status=status,
+            categories=SOS_CATEGORIES,
+            status_labels={"open": "Open", "acknowledged": "Acknowledged", "resolved": "Resolved"},
+        )
+    except pymysql.MySQLError:
+        return db_error_page()
+
+
+@app.route("/admin/sos/<int:sos_id>/<action>", methods=["POST"])
+@admin_required
+def admin_sos_action(sos_id, action):
+    if action not in ("acknowledge", "resolve", "reopen"):
+        abort(404)
+    me = session["user_id"]
+    note = request.form.get("admin_note", "").strip()[:500]
+    try:
+        report = db.query("SELECT id, user_id FROM sos_reports WHERE id=%s", (sos_id,), one=True)
+        if not report:
+            abort(404)
+        now = _dtfmt(datetime.now())
+        if action == "acknowledge":
+            db.execute(
+                """UPDATE sos_reports SET status='acknowledged', acknowledged_at=%s,
+                          handled_by=%s WHERE id=%s""",
+                (now, me, sos_id),
+            )
+            flash("SOS #{} acknowledged.".format(sos_id), "success")
+        elif action == "resolve":
+            db.execute(
+                """UPDATE sos_reports SET status='resolved', resolved_at=%s, handled_by=%s,
+                          acknowledged_at=COALESCE(acknowledged_at, %s) WHERE id=%s""",
+                (now, me, now, sos_id),
+            )
+            flash("SOS #{} resolved.".format(sos_id), "success")
+        else:
+            db.execute(
+                "UPDATE sos_reports SET status='open', resolved_at=NULL WHERE id=%s",
+                (sos_id,),
+            )
+            flash("SOS #{} reopened.".format(sos_id), "warning")
+
+        if note:
+            db.execute("UPDATE sos_reports SET admin_note=%s WHERE id=%s", (note, sos_id))
+        notify_user(
+            report["user_id"],
+            "SOS #{} update".format(sos_id),
+            "The admin team {} your SOS report.{}\n\nSee it here: {}/sos".format(
+                {"acknowledge": "acknowledged", "resolve": "resolved", "reopen": "reopened"}[action],
+                ("\n\nNote from the admin: " + note) if note else "",
+                config.APP_URL.rstrip("/"),
+            ),
+        )
+    except pymysql.MySQLError:
+        return db_error_page()
+    return redirect(url_for("admin_panel"))
 
 
 # ------------------------------------------------------------------
@@ -1177,6 +1636,11 @@ def uploaded_file(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template("404.html", message="You don't have access to that page."), 403
+
+
 @app.errorhandler(404)
 def not_found(e):
     return render_template("404.html"), 404
@@ -1196,6 +1660,8 @@ def robots_txt():
         "Disallow: /onboarding",
         "Disallow: /exchange/",
         "Disallow: /uploads/",
+        "Disallow: /sos",
+        "Disallow: /admin",
         "Allow: /",
         "",
         "Sitemap: {}/sitemap.xml".format(config.APP_URL.rstrip("/")),

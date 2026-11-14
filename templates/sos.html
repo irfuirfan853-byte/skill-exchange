@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Emergency SOS — Skill Exchange{% endblock %}
+{% block meta_description %}Private emergency SOS support for Skill Exchange members.{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div>
+    <h1>🆘 Emergency SOS</h1>
+    <p>If you are in immediate danger, contact your local emergency services first. Use this form to alert the Skill Exchange admin team.</p>
+  </div>
+</div>
+
+<div class="sos-grid">
+  <!-- Send an SOS -->
+  <section class="panel sos-send">
+    <div class="panel-head">
+      <h2>Send an SOS</h2>
+      <span class="badge badge-warn">🔒 Private</span>
+    </div>
+    <p class="panel-sub">
+      Your report is stored securely and is visible <strong>only to you and the platform admin</strong> —
+      it is never shown to other members.
+    </p>
+
+    <form method="post" class="sos-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="field">
+        <label for="category">What kind of emergency?</label>
+        <select id="category" name="category" required>
+          {% for key, label in categories.items() %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="message">What is happening?</label>
+        <textarea id="message" name="message" rows="4" maxlength="2000" required
+                  placeholder="Describe the situation so the admin can help…"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="location">Where are you? (optional)</label>
+        <input id="location" name="location" maxlength="160" placeholder="City, area or address">
+      </div>
+
+      <div class="field">
+        <label for="contact">Best way to reach you (optional)</label>
+        <input id="contact" name="contact" maxlength="120" placeholder="Phone number or another email">
+      </div>
+
+      <button type="submit" class="btn btn-sos btn-block">🆘 Send SOS now</button>
+      <p class="sos-fineprint">
+        Only one open SOS per account at a time — this stops accidental repeat alerts.
+      </p>
+    </form>
+  </section>
+
+  <!-- History -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Your SOS history</h2>
+      <span class="badge badge-muted">{{ reports|length }}</span>
+    </div>
+    <p class="panel-sub">Only you can see these reports</p>
+
+    {% if reports %}
+    <div class="sos-list">
+      {% for r in reports %}
+      <article class="sos-card sos-{{ r.status }}">
+        <div class="sos-card-top">
+          <span class="sos-cat">{{ categories.get(r.category, 'Other') }}</span>
+          {% if r.status == 'open' %}
+          <span class="badge badge-warn">🆘 {{ status_labels.open }}</span>
+          {% elif r.status == 'acknowledged' %}
+          <span class="badge badge-active">👀 {{ status_labels.acknowledged }}</span>
+          {% else %}
+          <span class="badge badge-done">✅ {{ status_labels.resolved }}</span>
+          {% endif %}
+        </div>
+        <p class="sos-msg">{{ r.message }}</p>
+        <div class="sos-meta">
+          Sent {{ r.created_at.strftime('%d %b %Y, %H:%M') if r.created_at else '—' }}
+          {% if r.location %} · 📍 {{ r.location }}{% endif %}
+          {% if r.contact %} · ☎ {{ r.contact }}{% endif %}
+        </div>
+        {% if r.admin_note %}
+        <div class="sos-note"><strong>Admin note:</strong> {{ r.admin_note }}</div>
+        {% endif %}
+        {% if r.status != 'resolved' %}
+        <form method="post" action="{{ url_for('sos_resolve', sos_id=r.id) }}" class="sos-resolve">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline btn-sm">Mark as resolved</button>
+        </form>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="big">🕊️</div>
+      You haven't sent any SOS reports. That's a good thing.
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+{% endblock %}

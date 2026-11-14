@@ -38,6 +38,10 @@
       <a href="{{ url_for('conversations') }}" class="{{ 'active' if request.endpoint == 'conversations' or request.endpoint == 'exchange' }}">Conversations{% if unread_count %}<span class="nav-badge">{{ unread_count }}</span>{% endif %}</a>
       <a href="{{ url_for('requests_page') }}" class="{{ 'active' if request.endpoint == 'requests_page' }}">Requests{% if pending_count %}<span class="nav-badge">{{ pending_count }}</span>{% endif %}</a>
       <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint == 'settings' }}">Settings</a>
+      <a href="{{ url_for('sos') }}" class="nav-sos {{ 'active' if request.endpoint == 'sos' }}" title="Emergency SOS">🆘 SOS</a>
+      {% if is_admin %}
+      <a href="{{ url_for('admin_panel') }}" class="nav-admin {{ 'active' if request.endpoint == 'admin_panel' }}" title="Admin console">🛡️ Admin{% if counts_open_sos %} <span class="nav-badge nav-badge-danger">{{ counts_open_sos }}</span>{% endif %}</a>
+      {% endif %}
       {% endif %}
     </div>
     <div class="nav-actions">

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Admin — Emergency SOS — Skill Exchange{% endblock %}
+{% block meta_description %}Skill Exchange admin console for emergency SOS reports.{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div>
+    <h1>🛡️ Admin console</h1>
+    <p>Emergency SOS reports from members. These reports are confidential — never share them outside the admin team.</p>
+  </div>
+</div>
+
+<div class="admin-stats">
+  <div class="stat-card stat-open">
+    <div class="stat-num">{{ counts.open }}</div>
+    <div class="stat-lbl">Open SOS</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ counts.acknowledged }}</div>
+    <div class="stat-lbl">Acknowledged</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ counts.resolved }}</div>
+    <div class="stat-lbl">Resolved</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ stats.users }}</div>
+    <div class="stat-lbl">Members</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ stats.exchanges }}</div>
+    <div class="stat-lbl">Exchanges</div>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Reports</h2>
+    <div class="admin-filters">
+      <a href="{{ url_for('admin_panel') }}" class="chip {{ 'chip-on' if not status }}">All</a>
+      {% for key, label in status_labels.items() %}
+      <a href="{{ url_for('admin_panel', status=key) }}" class="chip {{ 'chip-on' if status == key }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if reports %}
+  <div class="admin-list">
+    {% for r in reports %}
+    <article class="admin-card admin-{{ r.status }}">
+      <div class="admin-card-top">
+        <div>
+          <h4>#{{ r.id }} · {{ categories.get(r.category, 'Other') }}</h4>
+          <div class="admin-user">
+            <a href="{{ url_for('profile', user_id=r.user_id) }}">{{ r.user_name }}</a>
+            · <span class="admin-email">{{ r.user_email }}</span>
+            {% if r.location %} · 📍 {{ r.location }}{% endif %}
+            {% if r.contact %} · ☎ {{ r.contact }}{% endif %}
+          </div>
+        </div>
+        {% if r.status == 'open' %}
+        <span class="badge badge-warn">🆘 Open</span>
+        {% elif r.status == 'acknowledged' %}
+        <span class="badge badge-active">👀 Acknowledged</span>
+        {% else %}
+        <span class="badge badge-done">✅ Resolved</span>
+        {% endif %}
+      </div>
+
+      <p class="admin-msg">{{ r.message }}</p>
+
+      <div class="admin-meta">
+        Sent {{ r.created_at.strftime('%d %b %Y, %H:%M') if r.created_at else '—' }}
+        {% if r.acknowledged_at %} · acknowledged {{ r.acknowledged_at.strftime('%d %b %H:%M') }}{% endif %}
+        {% if r.resolved_at %} · resolved {{ r.resolved_at.strftime('%d %b %H:%M') }}{% endif %}
+        {% if r.handler_name %} · handled by {{ r.handler_name }}{% endif %}
+      </div>
+
+      {% if r.admin_note %}
+      <div class="sos-note"><strong>Admin note:</strong> {{ r.admin_note }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('admin_sos_action', sos_id=r.id, action='acknowledge') }}" class="admin-actions">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="admin_note" maxlength="500" placeholder="Note for the member (optional)">
+        {% if r.status == 'open' %}
+        <button type="submit" class="btn btn-primary btn-sm">Acknowledge</button>
+        {% endif %}
+      </form>
+
+      <div class="admin-actions">
+        <form method="post" action="{{ url_for('admin_sos_action', sos_id=r.id, action='resolve') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% if r.status != 'resolved' %}
+          <button type="submit" class="btn btn-outline btn-sm">Mark resolved</button>
+          {% endif %}
+        </form>
+        {% if r.status == 'resolved' %}
+        <form method="post" action="{{ url_for('admin_sos_action', sos_id=r.id, action='reopen') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger-outline btn-sm">Reopen</button>
+        </form>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="big">🛡️</div>
+    No SOS reports {% if status %}with status “{{ status_labels.get(status, status) }}”{% endif %}. Nothing needs attention right now.
+  </div>
+  {% endif %}
+</section>
+
+{% endblock %}

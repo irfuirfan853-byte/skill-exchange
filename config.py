@@ -52,3 +52,12 @@ MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
 # Demo accounts are only seeded when SE_DEMO=1 (dev machines). A fresh
 # production install starts empty and fills up with real sign-ups.
 DEMO_MODE = os.environ.get("SE_DEMO", "0") == "1"
+
+# Admin accounts for the emergency SOS console. Comma separated emails; those
+# accounts are marked as admin automatically the next time they log in.
+#   set SE_ADMIN_EMAILS=you@example.com,second@example.com
+ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.environ.get("SE_ADMIN_EMAILS", "").split(",")
+    if e.strip()
+}
