@@ -150,24 +150,127 @@ def save_upload(file_storage, folder):
     return os.path.join(folder, unique).replace("\\", "/")
 
 
+# --- Email delivery -------------------------------------------------------
+# Two transports:
+#   SMTP      — smtplib; works locally and on paid hosts.
+#   HTTPS API — Brevo or Resend; needed on hosts that block outbound SMTP
+#               (Render free web services block ports 25/465/587), so reset
+#               codes still reach a member's Gmail inbox.
+_last_email = {"at": None, "transport": "", "error": ""}
+
+
+def email_transport():
+    """Which transport is configured: 'brevo', 'resend', 'smtp' or ''."""
+    if config.MAIL_API in ("brevo", "resend") and config.MAIL_API_KEY:
+        return config.MAIL_API
+    if config.SMTP_HOST:
+        return "smtp"
+    return ""
+
+
+def email_status():
+    """Small summary for the admin console."""
+    transport = email_transport()
+    return {
+        "transport": transport,
+        "from_address": (config.MAIL_API_FROM if transport in ("brevo", "resend")
+                         else config.SMTP_FROM),
+        "last_error": _last_email.get("error", ""),
+        "last_at": _last_email.get("at"),
+    }
+
+
+def _send_smtp(to_address, subject, body_text):
+    import smtplib
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(body_text, "plain", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = config.SMTP_FROM
+    msg["To"] = to_address
+
+    if config.SMTP_PORT == 465:  # implicit TLS
+        srv = smtplib.SMTP_SSL(config.SMTP_HOST, 465, timeout=15)
+    else:
+        srv = smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15)
+    with srv:
+        if config.SMTP_USER and config.SMTP_PORT != 465:
+            srv.starttls()
+        if config.SMTP_USER:
+            srv.login(config.SMTP_USER, config.SMTP_PASSWORD)
+        srv.send_message(msg)
+
+
+def _post_json(url, payload, headers):
+    """POST JSON over HTTPS (stdlib only — no extra dependency)."""
+    import json
+    import urllib.error
+    import urllib.request
+
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Content-Type", "application/json")
+    for key, value in headers.items():
+        req.add_header(key, value)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        raise RuntimeError("HTTP {} — {}".format(exc.code, detail))
+    except urllib.error.URLError as exc:
+        raise RuntimeError("network error: {}".format(exc.reason))
+
+
+def _send_mail_api(transport, to_address, subject, body_text):
+    if transport == "brevo":
+        _post_json(
+            "https://api.brevo.com/v3/smtp/email",
+            {
+                "sender": {"name": config.MAIL_API_FROM_NAME,
+                           "email": config.MAIL_API_FROM},
+                "to": [{"email": to_address}],
+                "subject": subject,
+                "textContent": body_text,
+            },
+            {"api-key": config.MAIL_API_KEY, "accept": "application/json"},
+        )
+    else:  # resend
+        _post_json(
+            "https://api.resend.com/emails",
+            {
+                "from": "{} <{}>".format(config.MAIL_API_FROM_NAME, config.MAIL_API_FROM),
+                "to": [to_address],
+                "subject": subject,
+                "text": body_text,
+            },
+            {"Authorization": "Bearer " + config.MAIL_API_KEY},
+        )
+
+
 def send_email(to_address, subject, body_text):
-    """Send a notification email if SMTP is configured. Never raises."""
-    if not config.SMTP_HOST:
+    """Send an email through the configured transport. Never raises."""
+    transport = email_transport()
+    if not transport or not to_address:
         return False
     try:
-        import smtplib
-        from email.mime.text import MIMEText
-        msg = MIMEText(body_text, "plain", "utf-8")
-        msg["Subject"] = subject
-        msg["From"] = config.SMTP_FROM
-        msg["To"] = to_address
-        with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15) as srv:
-            if config.SMTP_USER:
-                srv.starttls()
-                srv.login(config.SMTP_USER, config.SMTP_PASSWORD)
-            srv.send_message(msg)
+        if transport == "smtp":
+            _send_smtp(to_address, subject, body_text)
+        else:
+            _send_mail_api(transport, to_address, subject, body_text)
+        _last_email.update({"at": datetime.now(), "transport": transport, "error": ""})
         return True
-    except Exception:
+    except Exception as exc:  # email must never break a request
+        detail = str(exc)
+        if transport == "smtp" and ("timed out" in detail.lower() or "timeout" in detail.lower()):
+            detail += (" — many hosts (including Render's free plan) block outbound SMTP; "
+                       "set SE_MAIL_API and SE_MAIL_API_KEY to send over HTTPS instead")
+        _last_email.update({"at": datetime.now(), "transport": transport,
+                            "error": detail[:400]})
+        try:
+            app.logger.warning("email send failed (%s): %s", transport, detail)
+        except Exception:
+            pass
         return False
 
 
@@ -519,15 +622,24 @@ def forgot_password():
                 "— Skill Exchange".format(user["full_name"], otp),
             )
             if not sent:
-                if not config.SMTP_HOST:
-                    # Dev fallback (no SMTP configured): show the code on screen
-                    # so the flow stays usable locally. Production sets SMTP.
+                if not email_transport() and config.SHOW_RESET_CODE:
+                    # Local testing only (SE_SHOW_RESET_CODE=1): show the code.
+                    # Never enabled on a public site — otherwise anyone could
+                    # reset any account by reading the code on screen.
                     flash(
-                        "Email sending isn't configured on this server (dev mode) — "
+                        "Email isn't configured on this machine — "
                         "your reset code is: {}".format(otp), "warning"
                     )
+                elif not email_transport():
+                    flash(
+                        "We can't send emails from this server yet, so no code was sent. "
+                        "Please contact the site admin.", "error"
+                    )
                 else:
-                    flash("Couldn't send the email right now — please try again.", "error")
+                    flash(
+                        "Couldn't send the email right now — please try again in a moment.",
+                        "error",
+                    )
             session["reset_user_id"] = user["id"]
             return redirect(url_for("verify_otp"))
 
@@ -816,6 +928,7 @@ def admin_panel():
         return render_template(
             "admin.html",
             reports=reports,
+            mail=email_status(),
             call_rooms=[{"id": r["id"], "name": r["user_name"]}
                         for r in reports if r["status"] != "resolved"],
             counts=counts,
@@ -826,6 +939,35 @@ def admin_panel():
         )
     except pymysql.MySQLError:
         return db_error_page()
+
+
+@app.route("/admin/email/test", methods=["POST"])
+@admin_required
+def admin_email_test():
+    me = session["user_id"]
+    target = request.form.get("to", "").strip()
+    if not target:
+        target = (get_user(me) or {}).get("email") or ""
+    if not target:
+        flash("No address to send to — add one in the field.", "error")
+    elif not email_transport():
+        flash(
+            "No email transport configured. Set SE_SMTP_HOST (paid hosts) or "
+            "SE_MAIL_API + SE_MAIL_API_KEY (HTTPS, works on Render's free plan).",
+            "error",
+        )
+    elif send_email(
+        target,
+        "Skill Exchange — test email",
+        "This is a test email from your Skill Exchange admin console.\n\n"
+        "If you can read this, password-reset codes will reach members' inboxes.",
+    ):
+        flash("Test email sent to {}. Check the inbox (and the spam folder). 🎉".format(target),
+              "success")
+    else:
+        flash("Test email failed: {}".format(_last_email.get("error") or "unknown error"),
+              "error")
+    return redirect(url_for("admin_panel"))
 
 
 @app.route("/admin/sos/<int:sos_id>/<action>", methods=["POST"])

@@ -35,15 +35,45 @@ SE_COOKIE_SECURE=1                            # only send session cookie over HT
 # --- App (recommended) ---
 SE_APP_URL=https://your-domain.com            # used in notification emails
 
-# --- Email notifications (optional) ---
+# --- Email (optional, but required for password-reset codes) ---
+# Option 1: HTTPS email API — use this on Render's free plan,
+# which blocks outbound SMTP (ports 25/465/587).
+SE_MAIL_API=brevo                 # or: resend
+SE_MAIL_API_KEY=your-api-key
+SE_MAIL_API_FROM=you@gmail.com    # the verified sender address
+SE_MAIL_FROM_NAME=Skill Exchange
+
+# Option 2: SMTP (works locally, and on paid hosts / your own VPS)
 SE_SMTP_HOST=smtp.gmail.com
 SE_SMTP_PORT=587
 SE_SMTP_USER=you@gmail.com
-SE_SMTP_PASSWORD=your-app-password
-SE_SMTP_FROM="Skill Exchange <no-reply@your-domain.com>"
+SE_SMTP_PASSWORD=your-app-password        # Gmail App Password, not your login password
+SE_SMTP_FROM="Skill Exchange <you@gmail.com>"
 ```
 
-> Without SMTP the app works perfectly — it just skips emails.
+> Without email configured the app works perfectly — it just skips emails and
+> password reset cannot deliver a code.
+
+### Sending reset codes to Gmail
+
+**On your own machine (SMTP works):**
+1. Google Account → **Security** → turn on **2-Step Verification**
+2. Security → **App passwords** → create one for “Mail” → copy the 16-character code
+3. Set `SE_SMTP_HOST=smtp.gmail.com`, `SE_SMTP_PORT=587`, `SE_SMTP_USER=you@gmail.com`,
+   `SE_SMTP_PASSWORD=<the app password>` and restart the app
+4. Log in as an admin → **/admin → Email delivery → Send test email** to confirm
+
+**On Render's free plan (SMTP is blocked):** use an HTTPS API instead.
+- **Brevo** (free 300 emails/day): verify your Gmail address as a sender, then set
+  `SE_MAIL_API=brevo`, `SE_MAIL_API_KEY=<key>`, `SE_MAIL_API_FROM=you@gmail.com`
+- **Resend** (free tier): set `SE_MAIL_API=resend`, `SE_MAIL_API_KEY=<key>`,
+  `SE_MAIL_API_FROM=<verified sender>`
+
+Either way, finish with **/admin → Email delivery → Send test email**.
+
+> Testing the reset flow locally without any email setup? Set
+> `SE_SHOW_RESET_CODE=1` and the code appears on screen. **Never enable that on
+> a public site** — it would let anyone reset any account.
 
 ---
 

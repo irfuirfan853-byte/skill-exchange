@@ -33,6 +33,33 @@
   </div>
 </div>
 
+<section class="panel mail-card">
+  <div class="panel-head">
+    <h2>📧 Email delivery</h2>
+    {% if mail.transport %}
+    <span class="badge badge-done">{{ mail.transport|upper }} configured</span>
+    {% else %}
+    <span class="badge badge-warn">Not configured</span>
+    {% endif %}
+  </div>
+  <p class="panel-sub">
+    Password-reset codes, SOS alerts and connection notices go out through this transport.
+    Render's free plan blocks outbound SMTP, so use an HTTPS email API there.
+  </p>
+  <div class="sec-table">
+    <div class="sec-row"><span>Transport</span><span>{{ mail.transport or 'none — emails are skipped' }}</span></div>
+    <div class="sec-row"><span>From address</span><span>{{ mail.from_address }}</span></div>
+    {% if mail.last_error %}
+    <div class="sec-row"><span>Last error</span><span>{{ mail.last_error }}</span></div>
+    {% endif %}
+  </div>
+  <form method="post" action="{{ url_for('admin_email_test') }}" class="admin-actions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="email" name="to" placeholder="Send test to (blank = your own email)" maxlength="190">
+    <button type="submit" class="btn btn-primary btn-sm">Send test email</button>
+  </form>
+</section>
+
 <section class="panel">
   <div class="panel-head">
     <h2>Reports</h2>

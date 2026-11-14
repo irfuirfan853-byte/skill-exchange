@@ -36,6 +36,20 @@ SMTP_PORT = int(os.environ.get("SE_SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SE_SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SE_SMTP_PASSWORD", "")
 SMTP_FROM = os.environ.get("SE_SMTP_FROM", "Skill Exchange <no-reply@skillexchange.app>")
+
+# HTTPS email API — use this when SMTP is blocked. Render's free web services
+# block outbound SMTP (ports 25/465/587) since Sept 2025, so password-reset
+# codes only arrive over HTTPS there. Supported: brevo, resend.
+#   set SE_MAIL_API=brevo  SE_MAIL_API_KEY=xkeysib-...
+MAIL_API = os.environ.get("SE_MAIL_API", "").strip().lower()
+MAIL_API_KEY = os.environ.get("SE_MAIL_API_KEY", "").strip()
+MAIL_API_FROM = os.environ.get("SE_MAIL_API_FROM", "no-reply@skillexchange.app")
+MAIL_API_FROM_NAME = os.environ.get("SE_MAIL_FROM_NAME", "Skill Exchange")
+
+# Show the password-reset code on screen when email cannot be sent. Only safe
+# on your own machine — never enable this on a public site.
+SHOW_RESET_CODE = os.environ.get("SE_SHOW_RESET_CODE", "0") == "1"
+
 APP_URL = os.environ.get("SE_APP_URL", "http://127.0.0.1:5000")
 
 # Uploaded files (certificates, shared files) live in an uploads/ folder
