@@ -92,6 +92,19 @@ CREATE TABLE IF NOT EXISTS sos_reports (
 CREATE INDEX IF NOT EXISTS idx_sos_user ON sos_reports(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_sos_status ON sos_reports(status, created_at);
 
+-- 3d. SOS_CALL_SIGNALS — WebRTC offer/answer/ICE for SOS calls
+CREATE TABLE IF NOT EXISTS sos_call_signals (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    sos_id     INTEGER NOT NULL,
+    sender_id  INTEGER NOT NULL,
+    msg_type   TEXT    NOT NULL,
+    payload    TEXT    NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (sos_id)    REFERENCES sos_reports(id) ON DELETE CASCADE,
+    FOREIGN KEY (sender_id) REFERENCES users(id)       ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_soscs_sos ON sos_call_signals(sos_id, id);
+
 -- 4. EXCHANGES
 CREATE TABLE IF NOT EXISTS exchanges (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,

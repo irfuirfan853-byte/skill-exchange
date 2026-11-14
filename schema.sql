@@ -117,6 +117,22 @@ CREATE TABLE sos_reports (
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------
+-- 3d. SOS_CALL_SIGNALS — WebRTC offer/answer/ICE for SOS calls
+--     (member <-> admin, per SOS report). Cleared after every call.
+-- ------------------------------------------------------------
+CREATE TABLE sos_call_signals (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    sos_id     INT UNSIGNED NOT NULL,
+    sender_id  INT UNSIGNED NOT NULL,
+    msg_type   VARCHAR(20)  NOT NULL,
+    payload    MEDIUMTEXT   NOT NULL,
+    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_soscs_sos (sos_id, id),
+    CONSTRAINT fk_soscs_sos    FOREIGN KEY (sos_id)    REFERENCES sos_reports (id) ON DELETE CASCADE,
+    CONSTRAINT fk_soscs_sender FOREIGN KEY (sender_id) REFERENCES users (id)        ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ------------------------------------------------------------
 -- 4. EXCHANGES — a give-and-take pairing between two people.
 --    Person A teaches skill X to B, while B teaches skill Y to A.
 -- ------------------------------------------------------------

@@ -222,6 +222,19 @@ def ensure_security_schema():
             )
             db.execute("CREATE INDEX IF NOT EXISTS idx_sos_user ON sos_reports(user_id, status)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_sos_status ON sos_reports(status, created_at)")
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS sos_call_signals (
+                       id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                       sos_id     INTEGER NOT NULL,
+                       sender_id  INTEGER NOT NULL,
+                       msg_type   TEXT    NOT NULL,
+                       payload    TEXT    NOT NULL,
+                       created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                       FOREIGN KEY (sos_id)    REFERENCES sos_reports(id) ON DELETE CASCADE,
+                       FOREIGN KEY (sender_id) REFERENCES users(id)       ON DELETE CASCADE
+                   )"""
+            )
+            db.execute("CREATE INDEX IF NOT EXISTS idx_soscs_sos ON sos_call_signals(sos_id, id)")
             cols = [c.get("name") for c in db.query("PRAGMA table_info(users)")]
             if "is_admin" not in cols:
                 db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
@@ -244,6 +257,19 @@ def ensure_security_schema():
                        KEY idx_sos_status (status, created_at),
                        CONSTRAINT fk_sos_user    FOREIGN KEY (user_id)    REFERENCES users (id) ON DELETE CASCADE,
                        CONSTRAINT fk_sos_handler FOREIGN KEY (handled_by) REFERENCES users (id) ON DELETE SET NULL
+                   ) ENGINE=InnoDB"""
+            )
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS sos_call_signals (
+                       id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                       sos_id     INT UNSIGNED NOT NULL,
+                       sender_id  INT UNSIGNED NOT NULL,
+                       msg_type   VARCHAR(20)  NOT NULL,
+                       payload    MEDIUMTEXT   NOT NULL,
+                       created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                       KEY idx_soscs_sos (sos_id, id),
+                       CONSTRAINT fk_soscs_sos    FOREIGN KEY (sos_id)    REFERENCES sos_reports (id) ON DELETE CASCADE,
+                       CONSTRAINT fk_soscs_sender FOREIGN KEY (sender_id) REFERENCES users (id)        ON DELETE CASCADE
                    ) ENGINE=InnoDB"""
             )
             cols = db.query(
@@ -646,6 +672,8 @@ def sos():
         return render_template(
             "sos.html",
             reports=reports,
+            call_rooms=[{"id": r["id"], "name": "the admin team"}
+                        for r in reports if r["status"] != "resolved"],
             categories=SOS_CATEGORIES,
             status_labels={"open": "Open — admin notified",
                            "acknowledged": "Acknowledged by admin",
@@ -677,6 +705,81 @@ def sos_resolve(sos_id):
     except pymysql.MySQLError:
         return db_error_page()
     return redirect(url_for("sos"))
+
+
+# ------------------------------------------------------------------
+# SOS calls — voice / video between the member and an admin.
+# Only the report owner and admins may read or write a room.
+# ------------------------------------------------------------------
+def _sos_call_room(sos_id, user_id):
+    """Return the report when this user may use its call room, else None."""
+    report = db.query(
+        "SELECT id, user_id, status FROM sos_reports WHERE id=%s", (sos_id,), one=True
+    )
+    if not report:
+        return None
+    if report["user_id"] != user_id and not is_admin_user(user_id):
+        return None  # never leak that the report exists
+    return report
+
+
+@app.route("/sos/<int:sos_id>/call/signal", methods=["POST"])
+@login_required
+def sos_call_signal(sos_id):
+    me = session["user_id"]
+    try:
+        report = _sos_call_room(sos_id, me)
+        if not report:
+            abort(404)
+        if report["status"] == "resolved":
+            return jsonify({"ok": False, "error": "This SOS is closed."}), 409
+        msg_type = request.form.get("msg_type")
+        payload = request.form.get("payload", "")
+        if msg_type not in ("offer", "answer", "candidate", "bye") or not payload:
+            return jsonify({"ok": False, "error": "bad payload"}), 400
+        if msg_type == "offer":
+            db.execute("DELETE FROM sos_call_signals WHERE sos_id=%s", (sos_id,))
+        db.execute(
+            """INSERT INTO sos_call_signals (sos_id, sender_id, msg_type, payload)
+               VALUES (%s, %s, %s, %s)""",
+            (sos_id, me, msg_type, payload[:20000]),
+        )
+        return jsonify({"ok": True})
+    except pymysql.MySQLError:
+        return jsonify({"ok": False}), 500
+
+
+@app.route("/sos/<int:sos_id>/call/signals/after/<int:last_id>")
+@login_required
+def sos_call_poll(sos_id, last_id):
+    me = session["user_id"]
+    try:
+        if not _sos_call_room(sos_id, me):
+            abort(404)
+        rows = db.query(
+            """SELECT id, sender_id, msg_type, payload FROM sos_call_signals
+               WHERE sos_id=%s AND id > %s ORDER BY id ASC LIMIT 200""",
+            (sos_id, last_id),
+        )
+        for r in rows:
+            r["mine"] = (r["sender_id"] == me)
+        return jsonify(rows)
+    except pymysql.MySQLError:
+        return jsonify([]), 500
+
+
+@app.route("/sos/<int:sos_id>/call/end", methods=["POST"])
+@login_required
+def sos_call_end(sos_id):
+    me = session["user_id"]
+    try:
+        if not _sos_call_room(sos_id, me):
+            abort(404)
+        # Signaling only — dropping it keeps SDP/ICE details out of the database.
+        db.execute("DELETE FROM sos_call_signals WHERE sos_id=%s", (sos_id,))
+        return jsonify({"ok": True})
+    except pymysql.MySQLError:
+        return jsonify({"ok": False}), 500
 
 
 # ------------------------------------------------------------------
@@ -713,6 +816,8 @@ def admin_panel():
         return render_template(
             "admin.html",
             reports=reports,
+            call_rooms=[{"id": r["id"], "name": r["user_name"]}
+                        for r in reports if r["status"] != "resolved"],
             counts=counts,
             stats=stats,
             status=status,
@@ -1571,10 +1676,13 @@ def call_signal(exchange_id):
             abort(404)
         msg_type = request.form.get("msg_type")
         payload = request.form.get("payload", "")
-        if msg_type in ("offer", "answer", "candidate") and payload:
+        if msg_type in ("offer", "answer", "candidate", "bye") and payload:
+            if msg_type == "offer":
+                # A new call starts clean — never replay an old call's SDP
+                db.execute("DELETE FROM call_signals WHERE exchange_id=%s", (exchange_id,))
             db.execute(
                 "INSERT INTO call_signals (exchange_id, sender_id, msg_type, payload) VALUES (%s, %s, %s, %s)",
-                (exchange_id, me, msg_type, payload),
+                (exchange_id, me, msg_type, payload[:20000]),
             )
             return jsonify({"ok": True})
         return jsonify({"ok": False, "error": "bad payload"}), 400
@@ -1621,8 +1729,8 @@ def call_end(exchange_id):
             "INSERT INTO calls (exchange_id, caller_id, callee_id, call_type, ended_at, duration_seconds) VALUES (%s, %s, %s, %s, NOW(), %s)",
             (exchange_id, me, other_id, call_type, duration),
         )
-        # Clear stale signaling so the next call starts fresh
-        db.execute("DELETE FROM call_signals WHERE exchange_id=%s", (exchange_id,))
+        # Signaling is cleared when the next offer arrives (see call_signal),
+        # so a "bye" posted by the other side survives long enough to be read.
         return jsonify({"ok": True})
     except pymysql.MySQLError:
         return jsonify({"ok": False}), 500

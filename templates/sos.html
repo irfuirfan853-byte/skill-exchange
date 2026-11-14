@@ -89,6 +89,10 @@
         <div class="sos-note"><strong>Admin note:</strong> {{ r.admin_note }}</div>
         {% endif %}
         {% if r.status != 'resolved' %}
+        <div class="sos-call-row">
+          <button type="button" class="btn btn-outline btn-sm" onclick="SOSCall.start({{ r.id }}, 'voice')">🎙️ Voice call the admin team</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="SOSCall.start({{ r.id }}, 'video')">📹 Video call the admin team</button>
+        </div>
         <form method="post" action="{{ url_for('sos_resolve', sos_id=r.id) }}" class="sos-resolve">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-outline btn-sm">Mark as resolved</button>
@@ -106,4 +110,14 @@
   </section>
 </div>
 
+{% include "_sos_call_overlay.html" %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.SOS_ROOMS = {{ (call_rooms or [])|tojson }};
+  window.CSRF_TOKEN = {{ csrf_token()|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/sos_call.js') }}"></script>
 {% endblock %}

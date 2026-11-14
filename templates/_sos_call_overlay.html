@@ -1,0 +1,22 @@
+{# Shared voice / video call overlay for SOS calls (member ⇄ admin).
+   The IDs match the exchange call overlay so the existing .call-* CSS works. #}
+<div class="call-overlay" id="callOverlay" hidden>
+  <div class="call-box">
+    <div class="call-top">
+      <div>
+        <h2 id="callName">SOS support</h2>
+        <p id="callStatus">Starting…</p>
+      </div>
+      <button type="button" class="icon-btn" onclick="SOSCall.hangup()" title="Close">✕</button>
+    </div>
+    <div class="call-videos">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <video id="localVideo" autoplay playsinline muted></video>
+    </div>
+    <div class="call-controls">
+      <button type="button" class="icon-btn" id="muteBtn" onclick="SOSCall.toggleMute()" title="Mute">🎙️</button>
+      <button type="button" class="icon-btn hangup-btn" onclick="SOSCall.hangup()" title="Hang up">📵</button>
+      <button type="button" class="icon-btn" id="camBtn" onclick="SOSCall.toggleCam()" title="Toggle camera">📷</button>
+    </div>
+  </div>
+</div>

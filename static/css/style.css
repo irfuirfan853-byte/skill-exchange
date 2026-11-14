@@ -664,3 +664,8 @@ img.avatar { object-fit: cover; }
   .sos-grid { grid-template-columns: 1fr; }
   .admin-stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* SOS call buttons */
+.sos-call-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.sos-call-row .btn { white-space: nowrap; }
+.admin-call-row { margin-top: 10px; }

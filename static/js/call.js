@@ -196,6 +196,11 @@
           }
           // candidates that arrive before our pc exists are replayed anyway,
           // because lastSignalId only advances after we've seen the row.
+        } else if (sig.msg_type === "bye") {
+          if (pc) {
+            setStatus("Call ended by the other person.");
+            setTimeout(() => teardown(false), 900);
+          }
         }
       }
     } catch (err) {
@@ -207,6 +212,7 @@
 
   function teardown(record) {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (record && pc) postSignal("bye", "{}").catch(log);
     busy = false;
     isInitiator = false;
 
@@ -243,6 +249,9 @@
         headers: { "X-CSRF-Token": window.CSRF_TOKEN || "" },
       }).catch(log);
     }
+
+    // Keep listening for incoming calls once this one is over.
+    setTimeout(startPolling, 1200);
   }
 
   // ---------- public API ----------
@@ -267,4 +276,16 @@
       if (btn) btn.textContent = camOff ? "🚫" : "📷";
     },
   };
+
+  // Listen for incoming calls as soon as the conversation page opens, so the
+  // other person does not have to press a call button for the call to connect.
+  (async function initIncoming() {
+    try {
+      const rows = await fetchJSON(`/exchange/${EXCHANGE_ID}/call/signals/after/0`);
+      if (rows.length) lastSignalId = rows[rows.length - 1].id; // skip old calls
+    } catch (e) {
+      /* offline or signed out — polling will retry */
+    }
+    startPolling();
+  })();
 })();

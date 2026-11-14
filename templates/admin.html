@@ -88,6 +88,13 @@
         {% endif %}
       </form>
 
+      {% if r.status != 'resolved' %}
+      <div class="sos-call-row admin-call-row">
+        <button type="button" class="btn btn-outline btn-sm" onclick="SOSCall.start({{ r.id }}, 'voice')">🎙️ Voice call {{ r.user_name }}</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="SOSCall.start({{ r.id }}, 'video')">📹 Video call {{ r.user_name }}</button>
+      </div>
+      {% endif %}
+
       <div class="admin-actions">
         <form method="post" action="{{ url_for('admin_sos_action', sos_id=r.id, action='resolve') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -108,9 +115,19 @@
   {% else %}
   <div class="empty">
     <div class="big">🛡️</div>
-    No SOS reports {% if status %}with status “{{ status_labels.get(status, status) }}”{% endif %}. Nothing needs attention right now.
+    No SOS reports {% if status %}with status “{{ status_labels.get(status, status) }}”{% endif %}.     Nothing needs attention right now.
   </div>
   {% endif %}
 </section>
 
+{% include "_sos_call_overlay.html" %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.SOS_ROOMS = {{ (call_rooms or [])|tojson }};
+  window.CSRF_TOKEN = {{ csrf_token()|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/sos_call.js') }}"></script>
 {% endblock %}
