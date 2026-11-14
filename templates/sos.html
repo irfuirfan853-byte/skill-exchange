@@ -110,6 +110,71 @@
   </section>
 </div>
 
+<!-- Teaching block: user security + what happens to SOS data -->
+<section class="panel sos-security">
+  <div class="panel-head">
+    <h2>🔐 Staying safe — and how we protect your data</h2>
+  </div>
+  <p class="panel-sub">
+    Most emergencies on a learning platform start with a message, a file or a shared contact detail.
+    These habits keep you safe while you teach and learn.
+  </p>
+
+  <div class="sec-grid">
+    <div class="sec-card">
+      <h3>🔑 Your password and codes</h3>
+      <ul>
+        <li>Use a password you don't use anywhere else.</li>
+        <li><strong>Never</strong> share your password — not even with someone who says they are an admin.</li>
+        <li>Reset codes (OTP) are for you only. Nobody legitimate will ever ask you for one.</li>
+        <li>On a shared or public computer, always log out when you finish.</li>
+      </ul>
+    </div>
+
+    <div class="sec-card">
+      <h3>👤 Verify before you trust</h3>
+      <ul>
+        <li>Check the profile, skills and certificates before agreeing to an exchange.</li>
+        <li>Use the voice or video call to confirm who you are talking to.</li>
+        <li>Be careful with people who rush you, ask for money, or move the chat off the platform immediately.</li>
+      </ul>
+    </div>
+
+    <div class="sec-card">
+      <h3>📎 Files, links and personal details</h3>
+      <ul>
+        <li>Don't open unexpected files or links — even from someone you are learning with.</li>
+        <li>Share only what the exchange needs: no ID cards, bank details or home address.</li>
+        <li>Never send money to a “teacher” or “learner”, and never pay to unlock a certificate.</li>
+      </ul>
+    </div>
+
+    <div class="sec-card">
+      <h3>🚨 In an emergency</h3>
+      <ul>
+        <li>Contact your local emergency services first — this page is not a replacement.</li>
+        <li>Send an SOS here so the admin team can act on the account side (block, review, preserve evidence).</li>
+        <li>Mark the report resolved once you are safe, so the team knows you no longer need help.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="sec-data">
+    <h3>What an SOS stores, and who can see it</h3>
+    <div class="sec-table">
+      <div class="sec-row"><span>Saved with your report</span><span>Emergency type, your description, optional location and contact, timestamps, status</span></div>
+      <div class="sec-row"><span>Who can read it</span><span><strong>Only you and platform admins</strong> — never other members, never public pages, not indexed by search engines</span></div>
+      <div class="sec-row"><span>What admins can do</span><span>Acknowledge, add a note you can see, resolve, reopen, or call you back</span></div>
+      <div class="sec-row"><span>Call privacy</span><span>Audio/video flows directly between you and the admin (peer-to-peer); the connection details used to set the call up are deleted when it ends</span></div>
+      <div class="sec-row"><span>Your password</span><span>Stored only as a hash — nobody, including admins, can read it. Reset codes are hashed too and expire in 10 minutes</span></div>
+    </div>
+    <p class="sos-fineprint">
+      Admins never message you asking for a password, an OTP, or a payment. If that happens,
+      send an SOS with the type <em>Account or data security</em> and stop replying.
+    </p>
+  </div>
+</section>
+
 {% include "_sos_call_overlay.html" %}
 
 {% endblock %}
