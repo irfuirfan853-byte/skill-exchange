@@ -81,6 +81,62 @@ def add_user_skill(user_id, skill_name, proficiency, years, category="Other"):
         )
 
 
+# Extra members so the community, search and profile pages look alive for
+# visitors. Same password as the other demo accounts (demo1234).
+EXTRA_MEMBERS = [
+    ("Maya Chen", "demo3@skillexchange.com", "Singapore",
+     "Product designer — Figma all day, watercolour sketchbook at night.",
+     [("Figma", "advanced", 4, "Design & Creative"),
+      ("Product Design", "advanced", 5, "Design & Creative"),
+      ("Watercolor Painting", "intermediate", 3, "Design & Creative")]),
+    ("Omar Haddad", "demo4@skillexchange.com", "Dubai, UAE",
+     "Copywriter. I'll get you speaking Arabic and writing emails people actually read.",
+     [("Arabic", "expert", 8, "Languages"),
+      ("Copywriting", "advanced", 6, "Business & Career")]),
+    ("Sofia Rossi", "demo5@skillexchange.com", "Milan, Italy",
+     "Photographer and home cook. I trade pasta lessons for anything with numbers.",
+     [("Photography", "expert", 7, "Design & Creative"),
+      ("Italian Cooking", "expert", 10, "Food & Lifestyle"),
+      ("Baking", "intermediate", 4, "Food & Lifestyle")]),
+    ("Daniel Okafor", "demo6@skillexchange.com", "Lagos, Nigeria",
+     "Data analyst by trade, chess player by habit.",
+     [("Data Analysis", "advanced", 5, "Programming & Tech"),
+      ("SQL", "advanced", 4, "Programming & Tech"),
+      ("Chess", "intermediate", 6, "Academics")]),
+    ("Priya Nair", "demo7@skillexchange.com", "Bengaluru, India",
+     "Yoga teacher and workshop host — I'll swap calm mornings for coding help.",
+     [("Yoga", "expert", 9, "Sports & Fitness"),
+      ("Public Speaking", "advanced", 5, "Business & Career"),
+      ("Meditation", "advanced", 6, "Sports & Fitness")]),
+]
+
+
+def seed_extra_members():
+    """Add the extra demo members (idempotent — safe to run again)."""
+    ids = []
+    for name, email, location, bio, teaches in EXTRA_MEMBERS:
+        row = db.query("SELECT id FROM users WHERE email=%s", (email,), one=True)
+        if row:
+            uid = row["id"]
+        else:
+            uid = db.execute(
+                "INSERT INTO users (full_name, email, password_hash, location, bio) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (name, email, generate_password_hash("demo1234"), location, bio),
+            )
+            print(f"  + user {name} <{email}>")
+        for skill, level, years, category in teaches:
+            add_user_skill(uid, skill, level, years, category)
+        ids.append(uid)
+    if ids:
+        db.execute(
+            "UPDATE users SET last_seen=NOW() WHERE id IN ({})".format(
+                ",".join(["%s"] * len(ids))),
+            tuple(ids),
+        )
+    return ids
+
+
 def main():
     print("Seeding demo data…")
     aria = get_or_create_user("Aria Sharma", "demo1@skillexchange.com")
@@ -197,8 +253,11 @@ def main():
     # Mark both users online so presence shows correctly
     db.execute("UPDATE users SET last_seen=NOW() WHERE id IN (%s, %s)", (aria, leo))
 
-    print("\nDone! Log in as demo1@skillexchange.com or demo2@skillexchange.com")
-    print("Password for both: demo1234")
+    # A small community around the exchange, so browse/search looks populated
+    seed_extra_members()
+
+    print("\nDone! Log in as demo1@skillexchange.com … demo7@skillexchange.com")
+    print("Password for all demo accounts: demo1234")
 
 
 if __name__ == "__main__":
