@@ -388,11 +388,20 @@ def ensure_security_schema():
 
 
 def is_admin_user(user_id):
-    """Admin rights come from the database flag only — never from the URL,
-    a form field or the session cookie's contents."""
+    """Admin rights are decided on the server — never by the URL, a form field
+    or the session cookie's contents.
+
+    When SE_ADMIN_EMAILS is set it is the hard allowlist: an account is admin
+    only if its email is listed, whatever its database flag says. Otherwise the
+    users.is_admin flag decides.
+    """
     try:
-        row = db.query("SELECT is_admin FROM users WHERE id=%s", (user_id,), one=True)
-        return bool(row and row.get("is_admin"))
+        row = db.query("SELECT email, is_admin FROM users WHERE id=%s", (user_id,), one=True)
+        if not row:
+            return False
+        if config.ADMIN_EMAILS:
+            return (row.get("email") or "").strip().lower() in config.ADMIN_EMAILS
+        return bool(row.get("is_admin"))
     except pymysql.MySQLError:
         return False
 
@@ -478,8 +487,7 @@ def inject_nav_counts():
                 (uid,), one=True,
             )
             counts["pending_count"] = row["c"] if row else 0
-            admin_row = db.query("SELECT is_admin FROM users WHERE id=%s", (uid,), one=True)
-            counts["is_admin"] = bool(admin_row and admin_row.get("is_admin"))
+            counts["is_admin"] = is_admin_user(uid)
             if counts["is_admin"]:
                 sos_row = db.query(
                     "SELECT COUNT(*) AS c FROM sos_reports WHERE status='open'", one=True
