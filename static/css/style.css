@@ -708,3 +708,13 @@ img.avatar { object-fit: cover; }
   flex: 1; min-width: 220px; padding: 8px 12px; border: 1px solid var(--border);
   border-radius: var(--radius-sm); font-size: 13.5px; font-family: inherit;
 }
+
+/* Compact header on phones: the action buttons move into the ☰ menu */
+.nav-mobile-only { display: none; }
+@media (max-width: 900px) {
+  .nav-links a.nav-mobile-only { display: block; }
+}
+@media (max-width: 520px) {
+  .nav-actions { gap: 8px; }
+  .nav-actions > .btn { display: none; }
+}

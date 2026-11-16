@@ -42,6 +42,10 @@
       {% if is_admin %}
       <a href="{{ url_for('admin_panel') }}" class="nav-admin {{ 'active' if request.endpoint == 'admin_panel' }}" title="Admin console">🛡️ Admin{% if counts_open_sos %} <span class="nav-badge nav-badge-danger">{{ counts_open_sos }}</span>{% endif %}</a>
       {% endif %}
+      <a href="{{ url_for('logout') }}" class="nav-mobile-only">Log out</a>
+      {% else %}
+      <a href="{{ url_for('login') }}" class="nav-mobile-only">Log in</a>
+      <a href="{{ url_for('signup') }}" class="nav-mobile-only">Sign up free</a>
       {% endif %}
     </div>
     <div class="nav-actions">
